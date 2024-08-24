@@ -61,6 +61,7 @@ pub const Chunk = struct {
         while (offset < self.count) {
             offset += self.dissassemble_instruction(offset);
         }
+        debug.print("== end of {s} ==\n\n", .{name});
     }
 
     pub fn dissassemble_instruction(self: Chunk, offset: usize) usize {
