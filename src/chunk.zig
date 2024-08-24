@@ -77,6 +77,11 @@ pub const Chunk = struct {
 
         switch (instruction) {
             @intFromEnum(OpCode.OP_RETURN) => return utils.simple_instruction("OP_RETURN", offset),
+            @intFromEnum(OpCode.OP_ADD) => return utils.simple_instruction("OP_ADD", offset),
+            @intFromEnum(OpCode.OP_SUBSTRACT) => return utils.simple_instruction("OP_SUBSTRACT", offset),
+            @intFromEnum(OpCode.OP_MULTIPLY) => return utils.simple_instruction("OP_MULTIPLY", offset),
+            @intFromEnum(OpCode.OP_DIVIDE) => return utils.simple_instruction("OP_DIVIDE", offset),
+            @intFromEnum(OpCode.OP_NEGATE) => return utils.simple_instruction("OP_NEGATE", offset),
             @intFromEnum(OpCode.OP_CONSTANT) => return utils.constant_instruction("OP_CONSTANT", self, offset),
             else => {
                 debug.print("unknown opcode {d}\n", .{instruction});

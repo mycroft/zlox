@@ -46,7 +46,7 @@ pub const VM = struct {
         while (true) {
             if (DEBUG_TRACE_EXECUTION) {
                 if (self.stack.items.len > 0) {
-                    debug.print("S:        ", .{});
+                    debug.print("{s:32}", .{""});
                     for (self.stack.items) |item| {
                         debug.print("[ ", .{});
                         print_value(item);
@@ -59,10 +59,17 @@ pub const VM = struct {
 
             const instruction = self.read_byte();
 
-            switch (instruction) {
+            try switch (instruction) {
                 @intFromEnum(OpCode.OP_CONSTANT) => {
                     const constant = self.read_constant();
                     try self.push(constant);
+                },
+                @intFromEnum(OpCode.OP_ADD) => self.binary_op(OpCode.OP_ADD),
+                @intFromEnum(OpCode.OP_SUBSTRACT) => self.binary_op(OpCode.OP_SUBSTRACT),
+                @intFromEnum(OpCode.OP_MULTIPLY) => self.binary_op(OpCode.OP_SUBSTRACT),
+                @intFromEnum(OpCode.OP_DIVIDE) => self.binary_op(OpCode.OP_SUBSTRACT),
+                @intFromEnum(OpCode.OP_NEGATE) => {
+                    try self.push(-self.pop());
                 },
                 @intFromEnum(OpCode.OP_RETURN) => {
                     print_value(self.pop());
@@ -72,7 +79,7 @@ pub const VM = struct {
                     debug.print("Invalid instruction: {d}\n", .{instruction});
                     return InterpretResult.RUNTIME_ERROR;
                 },
-            }
+            };
         }
 
         return InterpretResult.OK;
@@ -97,5 +104,20 @@ pub const VM = struct {
 
     pub fn pop(self: *VM) Value {
         return self.stack.pop();
+    }
+
+    pub fn binary_op(self: *VM, op: OpCode) !void {
+        const b = self.pop();
+        const a = self.pop();
+
+        const res: Value = switch (op) {
+            OpCode.OP_ADD => a + b,
+            OpCode.OP_SUBSTRACT => a - b,
+            OpCode.OP_MULTIPLY => a * b,
+            OpCode.OP_DIVIDE => a / b,
+            else => unreachable,
+        };
+
+        try self.push(res);
     }
 };

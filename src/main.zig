@@ -18,9 +18,23 @@ pub fn main() !void {
     var chunk = Chunk.new();
     try chunk.init(allocator);
 
-    const constant = try chunk.add_constant(allocator, 1.2);
+    var constant = try chunk.add_constant(allocator, 1.2);
     try chunk.write(allocator, @intFromEnum(OpCode.OP_CONSTANT), 123);
     try chunk.write(allocator, @intCast(constant), 123);
+
+    constant = try chunk.add_constant(allocator, 3.4);
+    try chunk.write(allocator, @intFromEnum(OpCode.OP_CONSTANT), 123);
+    try chunk.write(allocator, @intCast(constant), 123);
+
+    try chunk.write(allocator, @intFromEnum(OpCode.OP_ADD), 123);
+
+    constant = try chunk.add_constant(allocator, 5.6);
+    try chunk.write(allocator, @intFromEnum(OpCode.OP_CONSTANT), 123);
+    try chunk.write(allocator, @intCast(constant), 123);
+
+    try chunk.write(allocator, @intFromEnum(OpCode.OP_DIVIDE), 123);
+
+    try chunk.write(allocator, @intFromEnum(OpCode.OP_NEGATE), 123);
     try chunk.write(allocator, @intFromEnum(OpCode.OP_RETURN), 123);
 
     chunk.dissassemble("test chunk");
