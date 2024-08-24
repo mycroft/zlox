@@ -1,4 +1,7 @@
 const std = @import("std");
+const debug = std.debug;
+const Allocator = std.mem.Allocator;
+
 const Chunk = @import("./chunk.zig").Chunk;
 const OpCode = @import("./opcode.zig").OpCode;
 const Value = @import("./values.zig").Value;
@@ -6,6 +9,8 @@ const Value = @import("./values.zig").Value;
 const DEBUG_TRACE_EXECUTION = @import("./main.zig").DEBUG_TRACE_EXECUTION;
 
 const print_value = @import("./values.zig").print_value;
+
+const STACK_MAX = 256;
 
 const InterpretResult = enum {
     OK,
@@ -16,28 +21,39 @@ const InterpretResult = enum {
 pub const VM = struct {
     chunk: ?*Chunk,
     ip: ?usize,
+    stack: std.ArrayList(Value),
 
-    pub fn new() VM {
+    pub fn new(allocator: Allocator) VM {
         return VM{
             .chunk = null,
             .ip = null,
+            .stack = std.ArrayList(Value).init(allocator),
         };
     }
 
     pub fn free(self: *VM) void {
-        _ = self;
+        self.stack.deinit();
     }
 
-    pub fn interpret(self: *VM, chunk: *Chunk) InterpretResult {
+    pub fn interpret(self: *VM, chunk: *Chunk) !InterpretResult {
         self.chunk = chunk;
         self.ip = 0;
 
         return self.run();
     }
 
-    pub fn run(self: *VM) InterpretResult {
+    pub fn run(self: *VM) !InterpretResult {
         while (true) {
             if (DEBUG_TRACE_EXECUTION) {
+                if (self.stack.items.len > 0) {
+                    debug.print("S:        ", .{});
+                    for (self.stack.items) |item| {
+                        debug.print("[ ", .{});
+                        print_value(item);
+                        debug.print(" ]", .{});
+                    }
+                    debug.print("\n", .{});
+                }
                 _ = self.chunk.?.dissassemble_instruction(self.ip.?);
             }
 
@@ -46,14 +62,14 @@ pub const VM = struct {
             switch (instruction) {
                 @intFromEnum(OpCode.OP_CONSTANT) => {
                     const constant = self.read_constant();
-
-                    // XXX Those should not be std.debug, but stdout.
-                    print_value(constant);
-                    std.debug.print("\n", .{});
+                    try self.push(constant);
                 },
-                @intFromEnum(OpCode.OP_RETURN) => return InterpretResult.OK,
+                @intFromEnum(OpCode.OP_RETURN) => {
+                    print_value(self.pop());
+                    return InterpretResult.OK;
+                },
                 else => {
-                    std.debug.print("Invalid instruction: {d}\n", .{instruction});
+                    debug.print("Invalid instruction: {d}\n", .{instruction});
                     return InterpretResult.RUNTIME_ERROR;
                 },
             }
@@ -73,5 +89,13 @@ pub const VM = struct {
 
     pub fn read_constant(self: *VM) Value {
         return self.chunk.?.constants.values[read_byte(self)];
+    }
+
+    pub fn push(self: *VM, value: Value) !void {
+        try self.stack.append(value);
+    }
+
+    pub fn pop(self: *VM) Value {
+        return self.stack.pop();
     }
 };

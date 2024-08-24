@@ -13,7 +13,7 @@ pub fn main() !void {
     defer _ = debug.assert(gpa.deinit() == .ok);
     const allocator = gpa.allocator();
 
-    var vm = VM.new();
+    var vm = VM.new(allocator);
 
     var chunk = Chunk.new();
     try chunk.init(allocator);
@@ -25,7 +25,7 @@ pub fn main() !void {
 
     chunk.dissassemble("test chunk");
 
-    _ = vm.interpret(&chunk);
+    _ = try vm.interpret(&chunk);
     vm.free();
 
     chunk.deinit(allocator);
