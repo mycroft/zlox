@@ -12,7 +12,7 @@ const print_value = @import("./values.zig").print_value;
 
 const STACK_MAX = 256;
 
-const InterpretResult = enum {
+pub const InterpretResult = enum {
     OK,
     COMPILE_ERROR,
     RUNTIME_ERROR,
@@ -66,8 +66,8 @@ pub const VM = struct {
                 },
                 @intFromEnum(OpCode.OP_ADD) => self.binary_op(OpCode.OP_ADD),
                 @intFromEnum(OpCode.OP_SUBSTRACT) => self.binary_op(OpCode.OP_SUBSTRACT),
-                @intFromEnum(OpCode.OP_MULTIPLY) => self.binary_op(OpCode.OP_SUBSTRACT),
-                @intFromEnum(OpCode.OP_DIVIDE) => self.binary_op(OpCode.OP_SUBSTRACT),
+                @intFromEnum(OpCode.OP_MULTIPLY) => self.binary_op(OpCode.OP_MULTIPLY),
+                @intFromEnum(OpCode.OP_DIVIDE) => self.binary_op(OpCode.OP_DIVIDE),
                 @intFromEnum(OpCode.OP_NEGATE) => {
                     try self.push(-self.pop());
                 },
