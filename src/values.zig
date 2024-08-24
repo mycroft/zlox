@@ -39,5 +39,5 @@ pub const ValueArray = struct {
 };
 
 pub fn print_value(value: Value) void {
-    debug.print("{any}", .{value});
+    debug.print("{d}", .{value});
 }
