@@ -69,28 +69,43 @@ pub const VM = struct {
 
             const instruction = self.read_byte();
 
-            try switch (instruction) {
+            switch (instruction) {
                 @intFromEnum(OpCode.OP_CONSTANT) => {
                     const constant = self.read_constant();
                     try self.push(constant);
                 },
-                @intFromEnum(OpCode.OP_ADD) => self.binary_op(OpCode.OP_ADD),
-                @intFromEnum(OpCode.OP_SUBSTRACT) => self.binary_op(OpCode.OP_SUBSTRACT),
-                @intFromEnum(OpCode.OP_MULTIPLY) => self.binary_op(OpCode.OP_MULTIPLY),
-                @intFromEnum(OpCode.OP_DIVIDE) => self.binary_op(OpCode.OP_DIVIDE),
+                @intFromEnum(OpCode.OP_NIL) => try self.push(Value.nil_val()),
+                @intFromEnum(OpCode.OP_FALSE) => try self.push(Value.bool_val(false)),
+                @intFromEnum(OpCode.OP_TRUE) => try self.push(Value.bool_val(true)),
+                @intFromEnum(OpCode.OP_ADD), @intFromEnum(OpCode.OP_SUBSTRACT), @intFromEnum(OpCode.OP_MULTIPLY), @intFromEnum(OpCode.OP_DIVIDE), @intFromEnum(OpCode.OP_LESS), @intFromEnum(OpCode.OP_GREATER) => {
+                    const res = try self.binary_op(@enumFromInt(instruction));
+                    if (res != InterpretResult.OK) {
+                        return res;
+                    }
+                },
+                @intFromEnum(OpCode.OP_NOT) => {
+                    try self.push(Value.bool_val(self.pop().is_falsey()));
+                },
                 @intFromEnum(OpCode.OP_NEGATE) => {
-                    try self.push(-self.pop());
+                    if (!self.peek(0).is_number()) {
+                        self.runtime_error("Operand must be a number.");
+                        return InterpretResult.RUNTIME_ERROR;
+                    }
+                    try self.push(Value.number_val(-self.pop().as_number()));
                 },
                 @intFromEnum(OpCode.OP_RETURN) => {
                     print_value(self.pop());
                     debug.print("\n", .{});
                     return InterpretResult.OK;
                 },
+                @intFromEnum(OpCode.OP_EQUAL) => {
+                    try self.push(Value.bool_val(self.pop().equals(self.pop())));
+                },
                 else => {
                     debug.print("Invalid instruction: {d}\n", .{instruction});
                     return InterpretResult.RUNTIME_ERROR;
                 },
-            };
+            }
         }
 
         return InterpretResult.OK;
@@ -117,18 +132,39 @@ pub const VM = struct {
         return self.stack.pop();
     }
 
-    pub fn binary_op(self: *VM, op: OpCode) !void {
-        const b = self.pop();
-        const a = self.pop();
+    pub fn binary_op(self: *VM, op: OpCode) !InterpretResult {
+        if (!self.peek(0).is_number() or !self.peek(0).is_number()) {
+            self.runtime_error("Operands must be numbers");
+            return InterpretResult.RUNTIME_ERROR;
+        }
+
+        const b = self.pop().as_number();
+        const a = self.pop().as_number();
 
         const res: Value = switch (op) {
-            OpCode.OP_ADD => a + b,
-            OpCode.OP_SUBSTRACT => a - b,
-            OpCode.OP_MULTIPLY => a * b,
-            OpCode.OP_DIVIDE => a / b,
+            OpCode.OP_ADD => Value.number_val(a + b),
+            OpCode.OP_SUBSTRACT => Value.number_val(a - b),
+            OpCode.OP_MULTIPLY => Value.number_val(a * b),
+            OpCode.OP_DIVIDE => Value.number_val(a / b),
+            OpCode.OP_LESS => Value.bool_val(a < b),
+            OpCode.OP_GREATER => Value.bool_val(a > b),
             else => unreachable,
         };
 
         try self.push(res);
+
+        return InterpretResult.OK;
+    }
+
+    pub fn peek(self: *VM, distance: usize) Value {
+        return self.stack.items[self.stack.items.len - 1 - distance];
+    }
+
+    pub fn runtime_error(self: *VM, err_msg: []const u8) void {
+        const instruction = self.ip.?;
+        const line = self.chunk.?.lines[instruction];
+
+        debug.print("err: {s}\n", .{err_msg});
+        debug.print("[line {d}] in script\n", .{line});
     }
 };

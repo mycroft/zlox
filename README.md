@@ -60,6 +60,44 @@ zig build run
                                 [ 18 ]
 000b    2        OP_RETURN
 18
->
+> !(5 - 4 > 3 * 2 == !nil)
+== code ==
+0000    1      OP_CONSTANT    0 '5'
+0002    |      OP_CONSTANT    1 '4'
+0004    |     OP_SUBSTRACT
+0005    |      OP_CONSTANT    2 '3'
+0007    |      OP_CONSTANT    3 '2'
+0009    |      OP_MULTIPLY
+000a    |       OP_GREATER
+000b    |           OP_NIL
+000c    |           OP_NOT
+000d    |         OP_EQUAL
+000e    |           OP_NOT
+== end of code ==
 
+0000    1      OP_CONSTANT    0 '5'
+                                [ 5 ]
+0002    |      OP_CONSTANT    1 '4'
+                                [ 5 ][ 4 ]
+0004    |     OP_SUBSTRACT
+                                [ 1 ]
+0005    |      OP_CONSTANT    2 '3'
+                                [ 1 ][ 3 ]
+0007    |      OP_CONSTANT    3 '2'
+                                [ 1 ][ 3 ][ 2 ]
+0009    |      OP_MULTIPLY
+                                [ 1 ][ 6 ]
+000a    |       OP_GREATER
+                                [ false ]
+000b    |           OP_NIL
+                                [ false ][ nil ]
+000c    |           OP_NOT
+                                [ false ][ true ]
+000d    |         OP_EQUAL
+                                [ false ]
+000e    |           OP_NOT
+                                [ true ]
+000f    2        OP_RETURN
+true
+> 
 ```

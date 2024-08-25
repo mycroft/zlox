@@ -85,6 +85,13 @@ pub const Chunk = struct {
             @intFromEnum(OpCode.OP_DIVIDE) => return utils.simple_instruction("OP_DIVIDE", offset),
             @intFromEnum(OpCode.OP_NEGATE) => return utils.simple_instruction("OP_NEGATE", offset),
             @intFromEnum(OpCode.OP_CONSTANT) => return utils.constant_instruction("OP_CONSTANT", self, offset),
+            @intFromEnum(OpCode.OP_NIL) => return utils.simple_instruction("OP_NIL", offset),
+            @intFromEnum(OpCode.OP_TRUE) => return utils.simple_instruction("OP_TRUE", offset),
+            @intFromEnum(OpCode.OP_FALSE) => return utils.simple_instruction("OP_FALSE", offset),
+            @intFromEnum(OpCode.OP_NOT) => return utils.simple_instruction("OP_NOT", offset),
+            @intFromEnum(OpCode.OP_EQUAL) => return utils.simple_instruction("OP_EQUAL", offset),
+            @intFromEnum(OpCode.OP_GREATER) => return utils.simple_instruction("OP_GREATER", offset),
+            @intFromEnum(OpCode.OP_LESS) => return utils.simple_instruction("OP_LESS", offset),
             else => {
                 debug.print("unknown opcode {d}\n", .{instruction});
                 return offset + 1;

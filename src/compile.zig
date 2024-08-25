@@ -106,16 +106,20 @@ const Parser = struct {
         self.error_at(self.previous.?, error_message);
     }
 
-    fn emit_byte(self: *Parser, byte: u8) !void {
-        try self.chunk.write(byte, self.previous.?.line);
+    fn emit_byte(self: *Parser, byte: u8) ParsingError!void {
+        self.chunk.write(byte, self.previous.?.line) catch |err| {
+            switch (err) {
+                error.OutOfMemory => return ParsingError.OutOfMemory,
+            }
+        };
     }
 
-    fn emit_bytes(self: *Parser, byte0: u8, byte1: u8) !void {
+    fn emit_bytes(self: *Parser, byte0: u8, byte1: u8) ParsingError!void {
         try self.emit_byte(byte0);
         try self.emit_byte(byte1);
     }
 
-    fn emit_return(self: *Parser) !void {
+    fn emit_return(self: *Parser) ParsingError!void {
         try self.emit_byte(@intFromEnum(OpCode.OP_RETURN));
     }
 
@@ -131,9 +135,12 @@ const Parser = struct {
             self.error_msg("Failed converting float.");
             return ParsingError.FloatConv;
         };
-        self.emit_constant(value) catch {
+        self.emit_constant(Value.number_val(value)) catch |err| {
             self.error_msg("Failed emiting constant.");
-            return ParsingError.ChunkError;
+            return switch (err) {
+                error.OutOfMemory => ParsingError.OutOfMemory,
+                else => ParsingError.Unknown,
+            };
         };
     }
 
@@ -164,9 +171,19 @@ const Parser = struct {
 
         // Emit the operator instruction
         switch (operation_type) {
-            TokenType.MINUS => self.emit_byte(@intFromEnum(OpCode.OP_NEGATE)) catch {
+            TokenType.MINUS => self.emit_byte(@intFromEnum(OpCode.OP_NEGATE)) catch |err| {
                 self.error_msg("Failed emiting NEGATE opcode.");
-                return ParsingError.ChunkError;
+                return switch (err) {
+                    error.OutOfMemory => ParsingError.OutOfMemory,
+                    else => ParsingError.Unknown,
+                };
+            },
+            TokenType.BANG => self.emit_byte(@intFromEnum(OpCode.OP_NOT)) catch |err| {
+                self.error_msg("Failed emiting NOT opcode.");
+                return switch (err) {
+                    error.OutOfMemory => ParsingError.OutOfMemory,
+                    else => ParsingError.Unknown,
+                };
             },
             else => {},
         }
@@ -178,13 +195,19 @@ const Parser = struct {
 
         try self.parse_precedence(@enumFromInt(1 + @intFromEnum(parser_rule.precedence)));
 
-        switch (operator_type) {
-            TokenType.PLUS => self.emit_byte(@intFromEnum(OpCode.OP_ADD)) catch {},
-            TokenType.MINUS => self.emit_byte(@intFromEnum(OpCode.OP_SUBSTRACT)) catch {},
-            TokenType.STAR => self.emit_byte(@intFromEnum(OpCode.OP_MULTIPLY)) catch {},
-            TokenType.SLASH => self.emit_byte(@intFromEnum(OpCode.OP_DIVIDE)) catch {},
+        return switch (operator_type) {
+            TokenType.BANG_EQUAL => self.emit_bytes(@intFromEnum(OpCode.OP_EQUAL), @intFromEnum(OpCode.OP_NOT)),
+            TokenType.EQUAL_EQUAL => self.emit_byte(@intFromEnum(OpCode.OP_EQUAL)),
+            TokenType.GREATER => self.emit_byte(@intFromEnum(OpCode.OP_GREATER)),
+            TokenType.GREATER_EQUAL => self.emit_bytes(@intFromEnum(OpCode.OP_LESS), @intFromEnum(OpCode.OP_NOT)),
+            TokenType.LESS => self.emit_byte(@intFromEnum(OpCode.OP_LESS)),
+            TokenType.LESS_EQUAL => self.emit_bytes(@intFromEnum(OpCode.OP_GREATER), @intFromEnum(OpCode.OP_NOT)),
+            TokenType.PLUS => self.emit_byte(@intFromEnum(OpCode.OP_ADD)),
+            TokenType.MINUS => self.emit_byte(@intFromEnum(OpCode.OP_SUBSTRACT)),
+            TokenType.STAR => self.emit_byte(@intFromEnum(OpCode.OP_MULTIPLY)),
+            TokenType.SLASH => self.emit_byte(@intFromEnum(OpCode.OP_DIVIDE)),
             else => return,
-        }
+        };
     }
 
     fn get_rule(operator_type: TokenType) ParserRule {
@@ -200,31 +223,31 @@ const Parser = struct {
             TokenType.SEMICOLON => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.SLASH => ParserRule{ .prefix = null, .infix = binary, .precedence = Precedence.Factor },
             TokenType.STAR => ParserRule{ .prefix = null, .infix = binary, .precedence = Precedence.Factor },
-            TokenType.BANG => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
-            TokenType.BANG_EQUAL => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+            TokenType.BANG => ParserRule{ .prefix = unary, .infix = null, .precedence = Precedence.None },
+            TokenType.BANG_EQUAL => ParserRule{ .prefix = null, .infix = binary, .precedence = Precedence.Equality },
             TokenType.EQUAL => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
-            TokenType.EQUAL_EQUAL => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
-            TokenType.GREATER => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
-            TokenType.GREATER_EQUAL => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
-            TokenType.LESS => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
-            TokenType.LESS_EQUAL => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+            TokenType.EQUAL_EQUAL => ParserRule{ .prefix = null, .infix = binary, .precedence = Precedence.Equality },
+            TokenType.GREATER => ParserRule{ .prefix = null, .infix = binary, .precedence = Precedence.Comparison },
+            TokenType.GREATER_EQUAL => ParserRule{ .prefix = null, .infix = binary, .precedence = Precedence.Comparison },
+            TokenType.LESS => ParserRule{ .prefix = null, .infix = binary, .precedence = Precedence.Comparison },
+            TokenType.LESS_EQUAL => ParserRule{ .prefix = null, .infix = binary, .precedence = Precedence.Comparison },
             TokenType.IDENTIFIER => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.STRING => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.NUMBER => ParserRule{ .prefix = number, .infix = null, .precedence = Precedence.None },
             TokenType.AND => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.CLASS => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.ELSE => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
-            TokenType.FALSE => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+            TokenType.FALSE => ParserRule{ .prefix = literal, .infix = null, .precedence = Precedence.None },
             TokenType.FOR => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.FUN => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.IF => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
-            TokenType.NIL => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+            TokenType.NIL => ParserRule{ .prefix = literal, .infix = null, .precedence = Precedence.None },
             TokenType.OR => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.PRINT => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.RETURN => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.SUPER => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.THIS => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
-            TokenType.TRUE => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+            TokenType.TRUE => ParserRule{ .prefix = literal, .infix = null, .precedence = Precedence.None },
             TokenType.VAR => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.WHILE => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.ERROR => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
@@ -248,6 +271,15 @@ const Parser = struct {
             const infix_rule = Parser.get_rule(self.previous.?.token_type).infix;
             try infix_rule.?(self);
         }
+    }
+
+    fn literal(self: *Parser) ParsingError!void {
+        try switch (self.previous.?.token_type) {
+            TokenType.NIL => self.emit_byte(@intFromEnum(OpCode.OP_NIL)),
+            TokenType.TRUE => self.emit_byte(@intFromEnum(OpCode.OP_TRUE)),
+            TokenType.FALSE => self.emit_byte(@intFromEnum(OpCode.OP_FALSE)),
+            else => unreachable,
+        };
     }
 };
 
