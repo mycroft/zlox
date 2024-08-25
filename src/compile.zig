@@ -2,12 +2,16 @@ const std = @import("std");
 const debug = std.debug;
 const Allocator = std.mem.Allocator;
 
+const Obj = @import("./object.zig").Obj;
+const ObjType = @import("./object.zig").ObjType;
+
 const OpCode = @import("./opcode.zig").OpCode;
 const Scanner = @import("./scanner.zig").Scanner;
 const Token = @import("./scanner.zig").Token;
 const TokenType = @import("./scanner.zig").TokenType;
 const Chunk = @import("./chunk.zig").Chunk;
 const Value = @import("./values.zig").Value;
+const VM = @import("./vm.zig").VM;
 
 const ParsingError = @import("./errors.zig").ParsingError;
 
@@ -40,8 +44,9 @@ const Parser = struct {
     had_error: bool,
     panic_mode: bool,
     chunk: *Chunk,
+    vm: *VM,
 
-    fn new(scanner: *Scanner, chunk: *Chunk) Parser {
+    fn new(vm: *VM, scanner: *Scanner, chunk: *Chunk) Parser {
         return Parser{
             .current = null,
             .previous = null,
@@ -49,6 +54,7 @@ const Parser = struct {
             .had_error = false,
             .panic_mode = false,
             .chunk = chunk,
+            .vm = vm,
         };
     }
 
@@ -232,7 +238,7 @@ const Parser = struct {
             TokenType.LESS => ParserRule{ .prefix = null, .infix = binary, .precedence = Precedence.Comparison },
             TokenType.LESS_EQUAL => ParserRule{ .prefix = null, .infix = binary, .precedence = Precedence.Comparison },
             TokenType.IDENTIFIER => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
-            TokenType.STRING => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+            TokenType.STRING => ParserRule{ .prefix = string, .infix = null, .precedence = Precedence.None },
             TokenType.NUMBER => ParserRule{ .prefix = number, .infix = null, .precedence = Precedence.None },
             TokenType.AND => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.CLASS => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
@@ -281,13 +287,22 @@ const Parser = struct {
             else => unreachable,
         };
     }
+
+    fn string(self: *Parser) ParsingError!void {
+        const str = self.previous.?.start[1 .. self.previous.?.length - 1];
+        var string_obj = Obj.String.new(self.chunk.allocator, str);
+
+        self.vm.add_reference(&string_obj.obj);
+
+        try self.emit_constant(Value.obj_val(&string_obj.obj));
+    }
 };
 
-pub fn compile(allocator: Allocator, contents: []const u8, chunk: *Chunk) !bool {
+pub fn compile(allocator: Allocator, vm: *VM, contents: []const u8, chunk: *Chunk) !bool {
     _ = allocator;
 
     var scanner = Scanner.init(contents);
-    var parser = Parser.new(&scanner, chunk);
+    var parser = Parser.new(vm, &scanner, chunk);
 
     parser.advance();
     try parser.expression();

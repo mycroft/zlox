@@ -5,6 +5,7 @@ const Allocator = std.mem.Allocator;
 const Chunk = @import("./chunk.zig").Chunk;
 const OpCode = @import("./opcode.zig").OpCode;
 const Value = @import("./values.zig").Value;
+const Obj = @import("./object.zig").Obj;
 
 const compile = @import("./compile.zig").compile;
 
@@ -24,24 +25,30 @@ pub const VM = struct {
     chunk: ?*Chunk,
     ip: ?usize,
     stack: std.ArrayList(Value),
+    // Keeping creating objects in references to destroy objects on cleaning.
+    // In the book, a linked list between objects is used to handle this.
+    references: std.ArrayList(*Obj),
 
     pub fn new(allocator: Allocator) VM {
         return VM{
             .chunk = null,
             .ip = null,
             .stack = std.ArrayList(Value).init(allocator),
+            .references = std.ArrayList(*Obj).init(allocator),
         };
     }
 
     pub fn free(self: *VM) void {
         self.stack.deinit();
+        self.clean_references();
+        self.references.deinit();
     }
 
     pub fn interpret(self: *VM, allocator: Allocator, content: []const u8) !InterpretResult {
         var chunk = Chunk.new(allocator);
         defer chunk.deinit();
 
-        const res = try compile(allocator, content, &chunk);
+        const res = try compile(allocator, self, content, &chunk);
         if (!res) {
             return InterpretResult.COMPILE_ERROR;
         }
@@ -77,7 +84,13 @@ pub const VM = struct {
                 @intFromEnum(OpCode.OP_NIL) => try self.push(Value.nil_val()),
                 @intFromEnum(OpCode.OP_FALSE) => try self.push(Value.bool_val(false)),
                 @intFromEnum(OpCode.OP_TRUE) => try self.push(Value.bool_val(true)),
-                @intFromEnum(OpCode.OP_ADD), @intFromEnum(OpCode.OP_SUBSTRACT), @intFromEnum(OpCode.OP_MULTIPLY), @intFromEnum(OpCode.OP_DIVIDE), @intFromEnum(OpCode.OP_LESS), @intFromEnum(OpCode.OP_GREATER) => {
+                @intFromEnum(OpCode.OP_ADD),
+                @intFromEnum(OpCode.OP_SUBSTRACT),
+                @intFromEnum(OpCode.OP_MULTIPLY),
+                @intFromEnum(OpCode.OP_DIVIDE),
+                @intFromEnum(OpCode.OP_LESS),
+                @intFromEnum(OpCode.OP_GREATER),
+                => {
                     const res = try self.binary_op(@enumFromInt(instruction));
                     if (res != InterpretResult.OK) {
                         return res;
@@ -133,8 +146,13 @@ pub const VM = struct {
     }
 
     pub fn binary_op(self: *VM, op: OpCode) !InterpretResult {
+        if (op == OpCode.OP_ADD and self.peek(0).is_string() and self.peek(1).is_string()) {
+            try self.concatenate();
+            return InterpretResult.OK;
+        }
+
         if (!self.peek(0).is_number() or !self.peek(0).is_number()) {
-            self.runtime_error("Operands must be numbers");
+            self.runtime_error("Operands must be two numbers or two strings");
             return InterpretResult.RUNTIME_ERROR;
         }
 
@@ -156,6 +174,20 @@ pub const VM = struct {
         return InterpretResult.OK;
     }
 
+    pub fn concatenate(self: *VM) !void {
+        const b = self.pop().as_cstring();
+        const a = self.pop().as_cstring();
+
+        const concat_str = try std.mem.concat(self.chunk.?.allocator, u8, &.{ a, b });
+        defer self.chunk.?.allocator.free(concat_str);
+
+        var string_obj = Obj.String.new(self.chunk.?.allocator, concat_str);
+
+        self.add_reference(&string_obj.obj);
+
+        try self.push(Value.obj_val(&string_obj.obj));
+    }
+
     pub fn peek(self: *VM, distance: usize) Value {
         return self.stack.items[self.stack.items.len - 1 - distance];
     }
@@ -166,5 +198,16 @@ pub const VM = struct {
 
         debug.print("err: {s}\n", .{err_msg});
         debug.print("[line {d}] in script\n", .{line});
+    }
+
+    pub fn add_reference(self: *VM, obj: *Obj) void {
+        // XXX TODO catch unreachable to prevents
+        self.references.append(obj) catch unreachable;
+    }
+
+    pub fn clean_references(self: *VM) void {
+        for (self.references.items) |item| {
+            item.destroy();
+        }
     }
 };

@@ -3,12 +3,14 @@ const debug = std.debug;
 
 const Allocator = std.mem.Allocator;
 
+const Obj = @import("./object.zig").Obj;
 const utils = @import("./utils.zig");
 
 pub const ValueType = enum {
     Bool,
     Nil,
     Number,
+    Obj,
 };
 
 pub const Value = struct {
@@ -16,6 +18,7 @@ pub const Value = struct {
     as: union {
         boolean: bool,
         number: f64,
+        obj: *Obj,
     },
 
     pub fn bool_val(value: bool) Value {
@@ -45,12 +48,37 @@ pub const Value = struct {
         };
     }
 
+    pub fn obj_val(obj: *Obj) Value {
+        return Value{
+            .value_type = ValueType.Obj,
+            .as = .{
+                .obj = obj,
+            },
+        };
+    }
+
     pub fn as_bool(self: Value) bool {
         return self.as.boolean;
     }
 
     pub fn as_number(self: Value) f64 {
         return self.as.number;
+    }
+
+    pub fn as_obj(self: Value) *Obj {
+        return self.as.obj;
+    }
+
+    pub fn as_string(self: Value) *Obj.String {
+        const obj: *Obj.String = self.as_obj();
+
+        return obj;
+    }
+
+    pub fn as_cstring(self: Value) []const u8 {
+        const obj: *Obj.String = self.as_obj().as_string();
+
+        return obj.chars;
     }
 
     pub fn is_bool(self: Value) bool {
@@ -63,6 +91,14 @@ pub const Value = struct {
 
     pub fn is_nil(self: Value) bool {
         return self.value_type == ValueType.Nil;
+    }
+
+    pub fn is_obj(self: Value) bool {
+        return self.value_type == ValueType.Obj;
+    }
+
+    pub fn is_string(self: Value) bool {
+        return self.is_obj() and self.as_obj().is_string();
     }
 
     pub fn is_falsey(self: Value) bool {
@@ -78,6 +114,12 @@ pub const Value = struct {
             ValueType.Nil => true,
             ValueType.Bool => self.as_bool() == other.as_bool(),
             ValueType.Number => self.as_number() == other.as_number(),
+            ValueType.Obj => {
+                const obj_string0 = self.as_cstring();
+                const obj_string1 = other.as_cstring();
+
+                return std.mem.eql(u8, obj_string0, obj_string1);
+            },
         };
     }
 };
@@ -118,5 +160,6 @@ pub fn print_value(value: Value) void {
         ValueType.Nil => debug.print("nil", .{}),
         ValueType.Bool => debug.print("{any}", .{value.as_bool()}),
         ValueType.Number => debug.print("{d}", .{value.as_number()}),
+        ValueType.Obj => value.as_obj().print(),
     }
 }
