@@ -8,7 +8,7 @@ While reading [Crafting Interpreters](https://craftinginterpreters.com/), after 
 - [x] 15 - A Virtual Machine
 - [x] 16 - Scanning on Demand
 - [x] 17 - Compiling Expressions
-- [ ] 18 - Types of Values
+- [x] 18 - Types of Values
 - [ ] 19 - Strings
 - [ ] 20 - Hash Tables
 - [ ] 21 - Global Variables
