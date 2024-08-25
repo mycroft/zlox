@@ -15,19 +15,21 @@ pub const Chunk = struct {
     code: []u8,
     lines: []usize,
     constants: ValueArray,
+    allocator: Allocator,
 
-    pub fn new() Chunk {
+    pub fn new(allocator: Allocator) Chunk {
         return Chunk{
             .count = 0,
             .capacity = 0,
             .code = &.{},
             .lines = &.{},
             .constants = ValueArray.new(),
+            .allocator = allocator,
         };
     }
 
-    pub fn init(self: *Chunk, allocator: Allocator) !void {
-        self.deinit(allocator);
+    pub fn init(self: *Chunk) !void {
+        self.deinit(self.allocator);
 
         self.count = 0;
         self.capacity = 0;
@@ -36,12 +38,12 @@ pub const Chunk = struct {
         self.constants = ValueArray.new();
     }
 
-    pub fn write(self: *Chunk, allocator: Allocator, byte: u8, line: usize) !void {
+    pub fn write(self: *Chunk, byte: u8, line: usize) !void {
         if (self.capacity < self.count + 1) {
             const old_capacity = self.capacity;
             self.capacity = grow_capacity(old_capacity);
-            self.code = try allocator.realloc(self.code, self.capacity);
-            self.lines = try allocator.realloc(self.lines, self.capacity);
+            self.code = try self.allocator.realloc(self.code, self.capacity);
+            self.lines = try self.allocator.realloc(self.lines, self.capacity);
         }
 
         self.code[self.count] = byte;
@@ -59,7 +61,7 @@ pub const Chunk = struct {
         var offset: usize = 0;
 
         while (offset < self.count) {
-            offset += self.dissassemble_instruction(offset);
+            offset = self.dissassemble_instruction(offset);
         }
         debug.print("== end of {s} ==\n\n", .{name});
     }
@@ -90,17 +92,17 @@ pub const Chunk = struct {
         }
     }
 
-    pub fn deinit(self: *Chunk, allocator: Allocator) void {
-        self.constants.free(allocator);
+    pub fn deinit(self: *Chunk) void {
+        self.constants.free(self.allocator);
 
         if (self.capacity > 0) {
-            allocator.free(self.code);
-            allocator.free(self.lines);
+            self.allocator.free(self.code);
+            self.allocator.free(self.lines);
         }
     }
 
-    pub fn add_constant(self: *Chunk, allocator: Allocator, value: Value) !usize {
-        try self.constants.write(allocator, value);
+    pub fn add_constant(self: *Chunk, value: Value) !usize {
+        try self.constants.write(self.allocator, value);
         return self.constants.count - 1;
     }
 };

@@ -6,6 +6,8 @@ const Chunk = @import("./chunk.zig").Chunk;
 const OpCode = @import("./opcode.zig").OpCode;
 const Value = @import("./values.zig").Value;
 
+const compile = @import("./compile.zig").compile;
+
 const DEBUG_TRACE_EXECUTION = @import("./main.zig").DEBUG_TRACE_EXECUTION;
 
 const print_value = @import("./values.zig").print_value;
@@ -35,11 +37,19 @@ pub const VM = struct {
         self.stack.deinit();
     }
 
-    pub fn interpret(self: *VM, chunk: *Chunk) !InterpretResult {
-        self.chunk = chunk;
+    pub fn interpret(self: *VM, allocator: Allocator, content: []const u8) !InterpretResult {
+        var chunk = Chunk.new(allocator);
+        defer chunk.deinit();
+
+        const res = try compile(allocator, content, &chunk);
+        if (!res) {
+            return InterpretResult.COMPILE_ERROR;
+        }
+
+        self.chunk = &chunk;
         self.ip = 0;
 
-        return self.run();
+        return try self.run();
     }
 
     pub fn run(self: *VM) !InterpretResult {
@@ -73,6 +83,7 @@ pub const VM = struct {
                 },
                 @intFromEnum(OpCode.OP_RETURN) => {
                     print_value(self.pop());
+                    debug.print("\n", .{});
                     return InterpretResult.OK;
                 },
                 else => {
