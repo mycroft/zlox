@@ -24,3 +24,14 @@ pub fn constant_instruction(opcode_name: []const u8, chunk: Chunk, offset: usize
     debug.print("'\n", .{});
     return offset + 2;
 }
+
+pub fn compute_hash(str: []const u8) u32 {
+    var res_hash: u32 = 2166136261;
+
+    for (str) |c| {
+        res_hash ^= c;
+        res_hash *%= 16777619;
+    }
+
+    return res_hash;
+}

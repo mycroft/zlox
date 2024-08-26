@@ -2,6 +2,8 @@ const std = @import("std");
 const debug = std.debug;
 const Allocator = std.mem.Allocator;
 
+const compute_hash = @import("./utils.zig").compute_hash;
+
 pub const ObjType = enum {
     String,
 };
@@ -13,8 +15,9 @@ pub const Obj = struct {
     pub const String = struct {
         chars: []const u8,
         obj: Obj,
+        hash: u32,
 
-        pub fn new(allocator: std.mem.Allocator, str: []const u8) *String {
+        pub fn new(allocator: std.mem.Allocator, chars: []const u8) *String {
             const obj = Obj{
                 .kind = ObjType.String,
                 .allocator = allocator,
@@ -22,7 +25,9 @@ pub const Obj = struct {
 
             const str_obj = allocator.create(String) catch unreachable;
             str_obj.obj = obj;
-            str_obj.chars = allocator.dupe(u8, str) catch unreachable;
+
+            str_obj.chars = chars;
+            str_obj.hash = compute_hash(str_obj.chars);
 
             return str_obj;
         }

@@ -6,8 +6,10 @@ const Chunk = @import("./chunk.zig").Chunk;
 const OpCode = @import("./opcode.zig").OpCode;
 const Value = @import("./values.zig").Value;
 const Obj = @import("./object.zig").Obj;
+const Table = @import("./table.zig").Table;
 
 const compile = @import("./compile.zig").compile;
+const compute_hash = @import("./utils.zig").compute_hash;
 
 const DEBUG_TRACE_EXECUTION = @import("./main.zig").DEBUG_TRACE_EXECUTION;
 
@@ -22,24 +24,31 @@ pub const InterpretResult = enum {
 };
 
 pub const VM = struct {
+    allocator: Allocator,
     chunk: ?*Chunk,
     ip: ?usize,
     stack: std.ArrayList(Value),
     // Keeping creating objects in references to destroy objects on cleaning.
     // In the book, a linked list between objects is used to handle this.
     references: std.ArrayList(*Obj),
+    strings: Table,
 
     pub fn new(allocator: Allocator) VM {
         return VM{
+            .allocator = allocator,
             .chunk = null,
             .ip = null,
             .stack = std.ArrayList(Value).init(allocator),
             .references = std.ArrayList(*Obj).init(allocator),
+            .strings = Table.new(allocator),
         };
     }
 
     pub fn free(self: *VM) void {
         self.stack.deinit();
+
+        self.strings.dump();
+        self.strings.deinit();
         self.clean_references();
         self.references.deinit();
     }
@@ -179,9 +188,8 @@ pub const VM = struct {
         const a = self.pop().as_cstring();
 
         const concat_str = try std.mem.concat(self.chunk.?.allocator, u8, &.{ a, b });
-        defer self.chunk.?.allocator.free(concat_str);
 
-        var string_obj = Obj.String.new(self.chunk.?.allocator, concat_str);
+        var string_obj = self.take_string(concat_str);
 
         self.add_reference(&string_obj.obj);
 
@@ -201,6 +209,12 @@ pub const VM = struct {
     }
 
     pub fn add_reference(self: *VM, obj: *Obj) void {
+        // do not add duplicate references
+        for (self.references.items) |item| {
+            if (item == obj) {
+                return;
+            }
+        }
         // XXX TODO catch unreachable to prevents
         self.references.append(obj) catch unreachable;
     }
@@ -209,5 +223,37 @@ pub const VM = struct {
         for (self.references.items) |item| {
             item.destroy();
         }
+    }
+
+    pub fn copy_string(self: *VM, source: []const u8) *Obj.String {
+        const hash = compute_hash(source);
+        const obj_string = self.strings.find_string(source, hash);
+
+        if (obj_string != null) {
+            return obj_string.?;
+        }
+
+        const copy: []const u8 = self.allocator.dupe(u8, source) catch unreachable;
+        return self.allocate_string(copy);
+    }
+
+    pub fn take_string(self: *VM, source: []const u8) *Obj.String {
+        const hash = compute_hash(source);
+        const obj_string = self.strings.find_string(source, hash);
+
+        if (obj_string != null) {
+            // free given string
+            self.allocator.free(source);
+            return obj_string.?;
+        }
+
+        return self.allocate_string(source);
+    }
+
+    pub fn allocate_string(self: *VM, source: []const u8) *Obj.String {
+        const obj_string = Obj.String.new(self.allocator, source);
+        _ = self.strings.set(obj_string, Value.nil_val());
+
+        return obj_string;
     }
 };

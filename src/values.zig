@@ -114,13 +114,17 @@ pub const Value = struct {
             ValueType.Nil => true,
             ValueType.Bool => self.as_bool() == other.as_bool(),
             ValueType.Number => self.as_number() == other.as_number(),
-            ValueType.Obj => {
-                const obj_string0 = self.as_cstring();
-                const obj_string1 = other.as_cstring();
-
-                return std.mem.eql(u8, obj_string0, obj_string1);
-            },
+            ValueType.Obj => self.as_obj() == other.as_obj(),
         };
+    }
+
+    pub fn print(self: Value) void {
+        switch (self.value_type) {
+            ValueType.Nil => debug.print("nil", .{}),
+            ValueType.Bool => debug.print("{any}", .{self.as_bool()}),
+            ValueType.Number => debug.print("{d}", .{self.as_number()}),
+            ValueType.Obj => self.as_obj().print(),
+        }
     }
 };
 
@@ -156,10 +160,5 @@ pub const ValueArray = struct {
 };
 
 pub fn print_value(value: Value) void {
-    switch (value.value_type) {
-        ValueType.Nil => debug.print("nil", .{}),
-        ValueType.Bool => debug.print("{any}", .{value.as_bool()}),
-        ValueType.Number => debug.print("{d}", .{value.as_number()}),
-        ValueType.Obj => value.as_obj().print(),
-    }
+    value.print();
 }

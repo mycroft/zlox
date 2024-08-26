@@ -7,6 +7,9 @@ const OpCode = @import("./opcode.zig").OpCode;
 const VM = @import("./vm.zig").VM;
 const InterpretResult = @import("./vm.zig").InterpretResult;
 
+// XXX imported to run tests.
+const Table = @import("./table.zig");
+
 pub const DEBUG_TRACE_EXECUTION = true;
 
 pub fn repl(allocator: Allocator, vm: *VM) !void {

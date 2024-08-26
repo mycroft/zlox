@@ -290,7 +290,8 @@ const Parser = struct {
 
     fn string(self: *Parser) ParsingError!void {
         const str = self.previous.?.start[1 .. self.previous.?.length - 1];
-        var string_obj = Obj.String.new(self.chunk.allocator, str);
+
+        var string_obj = self.vm.copy_string(str);
 
         self.vm.add_reference(&string_obj.obj);
 
