@@ -10,7 +10,7 @@ While reading [Crafting Interpreters](https://craftinginterpreters.com/), after 
 - [x] 17 - Compiling Expressions
 - [x] 18 - Types of Values
 - [x] 19 - Strings
-- [ ] 20 - Hash Tables
+- [x] 20 - Hash Tables
 - [ ] 21 - Global Variables
 - [ ] 22 - Local Variables
 - [ ] 23 - Jumping Back and Forth
