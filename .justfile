@@ -1,8 +1,8 @@
 build:
     zig build
 
-run:
-    zig build run
+run *ARGS:
+    zig build run -- {{ARGS}}
 
 test:
     zig build test

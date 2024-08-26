@@ -11,7 +11,7 @@ While reading [Crafting Interpreters](https://craftinginterpreters.com/), after 
 - [x] 18 - Types of Values
 - [x] 19 - Strings
 - [x] 20 - Hash Tables
-- [ ] 21 - Global Variables
+- [x] 21 - Global Variables
 - [ ] 22 - Local Variables
 - [ ] 23 - Jumping Back and Forth
 - [ ] 24 - Calls and Functions

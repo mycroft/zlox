@@ -70,7 +70,7 @@ pub const Value = struct {
     }
 
     pub fn as_string(self: Value) *Obj.String {
-        const obj: *Obj.String = self.as_obj();
+        const obj: *Obj.String = self.as_obj().as_string();
 
         return obj;
     }
@@ -125,6 +125,18 @@ pub const Value = struct {
             ValueType.Number => debug.print("{d}", .{self.as_number()}),
             ValueType.Obj => self.as_obj().print(),
         }
+    }
+
+    pub fn type_print(self: Value) void {
+        switch (self.value_type) {
+            ValueType.Nil => debug.print("(nil)", .{}),
+            ValueType.Bool => debug.print("(bool)", .{}),
+            ValueType.Number => debug.print("(number)", .{}),
+            ValueType.Obj => debug.print("(obj)", .{}),
+        }
+
+        debug.print(" ", .{});
+        self.print();
     }
 };
 

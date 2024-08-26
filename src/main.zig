@@ -17,7 +17,11 @@ pub fn repl(allocator: Allocator, vm: *VM) !void {
     const stdout = std.io.getStdOut().writer();
 
     while (true) {
-        try stdout.print("> ", .{});
+        if (vm.has_tracing()) {
+            vm.globals.dump();
+        }
+
+        try stdout.print("zlox> ", .{});
 
         @memset(&line, 0);
 

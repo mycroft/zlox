@@ -30,8 +30,8 @@ const Precedence = enum {
 };
 
 const ParserRule = struct {
-    prefix: ?*const fn (*Parser) ParsingError!void,
-    infix: ?*const fn (*Parser) ParsingError!void,
+    prefix: ?*const fn (*Parser, bool) ParsingError!void,
+    infix: ?*const fn (*Parser, bool) ParsingError!void,
     precedence: Precedence,
 };
 
@@ -134,7 +134,9 @@ const Parser = struct {
         try self.emit_return();
     }
 
-    fn number(self: *Parser) ParsingError!void {
+    fn number(self: *Parser, can_assign: bool) ParsingError!void {
+        _ = can_assign;
+
         const value = std.fmt.parseFloat(f64, self.previous.?.start[0..self.previous.?.length]) catch {
             self.error_msg("Failed converting float.");
             return ParsingError.FloatConv;
@@ -162,12 +164,16 @@ const Parser = struct {
         return @intCast(constant);
     }
 
-    fn grouping(self: *Parser) ParsingError!void {
+    fn grouping(self: *Parser, can_assign: bool) ParsingError!void {
+        _ = can_assign;
+
         try self.expression();
         self.consume(TokenType.RIGHT_PAREN, "Expect ')' after expression.");
     }
 
-    fn unary(self: *Parser) ParsingError!void {
+    fn unary(self: *Parser, can_assign: bool) ParsingError!void {
+        _ = can_assign;
+
         const operation_type = self.previous.?.token_type;
 
         // Compile the operand
@@ -193,7 +199,9 @@ const Parser = struct {
         }
     }
 
-    fn binary(self: *Parser) ParsingError!void {
+    fn binary(self: *Parser, can_assign: bool) ParsingError!void {
+        _ = can_assign;
+
         const operator_type = self.previous.?.token_type;
         const parser_rule = Parser.get_rule(operator_type);
 
@@ -235,7 +243,7 @@ const Parser = struct {
             TokenType.GREATER_EQUAL => ParserRule{ .prefix = null, .infix = binary, .precedence = Precedence.Comparison },
             TokenType.LESS => ParserRule{ .prefix = null, .infix = binary, .precedence = Precedence.Comparison },
             TokenType.LESS_EQUAL => ParserRule{ .prefix = null, .infix = binary, .precedence = Precedence.Comparison },
-            TokenType.IDENTIFIER => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+            TokenType.IDENTIFIER => ParserRule{ .prefix = variable, .infix = null, .precedence = Precedence.None },
             TokenType.STRING => ParserRule{ .prefix = string, .infix = null, .precedence = Precedence.None },
             TokenType.NUMBER => ParserRule{ .prefix = number, .infix = null, .precedence = Precedence.None },
             TokenType.AND => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
@@ -268,16 +276,23 @@ const Parser = struct {
             return;
         }
 
-        try prefix_rule.?(self);
+        const can_assign = @intFromEnum(precedence) <= @intFromEnum(Precedence.Assignement);
+        try prefix_rule.?(self, can_assign);
 
         while (@intFromEnum(precedence) <= @intFromEnum(Parser.get_rule(self.current.?.token_type).precedence)) {
             self.advance();
             const infix_rule = Parser.get_rule(self.previous.?.token_type).infix;
-            try infix_rule.?(self);
+            try infix_rule.?(self, can_assign);
+        }
+
+        if (can_assign and self.match(TokenType.EQUAL)) {
+            self.error_msg("Invalid assignment target.");
         }
     }
 
-    fn literal(self: *Parser) ParsingError!void {
+    fn literal(self: *Parser, can_assign: bool) ParsingError!void {
+        _ = can_assign;
+
         try switch (self.previous.?.token_type) {
             TokenType.NIL => self.emit_byte(@intFromEnum(OpCode.OP_NIL)),
             TokenType.TRUE => self.emit_byte(@intFromEnum(OpCode.OP_TRUE)),
@@ -286,7 +301,9 @@ const Parser = struct {
         };
     }
 
-    fn string(self: *Parser) ParsingError!void {
+    fn string(self: *Parser, can_assign: bool) ParsingError!void {
+        _ = can_assign;
+
         const str = self.previous.?.start[1 .. self.previous.?.length - 1];
 
         var string_obj = self.vm.copy_string(str);
@@ -294,6 +311,116 @@ const Parser = struct {
         self.vm.add_reference(&string_obj.obj);
 
         try self.emit_constant(Value.obj_val(&string_obj.obj));
+    }
+
+    fn variable(self: *Parser, can_assign: bool) ParsingError!void {
+        try self.named_variable(self.previous.?, can_assign);
+    }
+
+    fn named_variable(self: *Parser, token: Token, can_assign: bool) ParsingError!void {
+        const constant = try self.identifier_constant(token);
+        if (can_assign and self.match(TokenType.EQUAL)) {
+            try self.expression();
+            try self.emit_bytes(@intFromEnum(OpCode.OP_SET_GLOBAL), constant);
+        } else {
+            try self.emit_bytes(@intFromEnum(OpCode.OP_GET_GLOBAL), constant);
+        }
+    }
+
+    fn declaration(self: *Parser) ParsingError!void {
+        if (self.match(TokenType.VAR)) {
+            try self.var_declaration();
+        } else {
+            try self.statement();
+        }
+
+        if (self.panic_mode) {
+            self.synchronize();
+        }
+    }
+
+    fn statement(self: *Parser) ParsingError!void {
+        if (self.match(TokenType.PRINT)) {
+            try self.print_statement();
+        } else {
+            try self.expression_statement();
+        }
+    }
+
+    fn match(self: *Parser, token_type: TokenType) bool {
+        if (!self.check(token_type))
+            return false;
+        self.advance();
+        return true;
+    }
+
+    fn check(self: *Parser, token_type: TokenType) bool {
+        return self.current.?.token_type == token_type;
+    }
+
+    fn print_statement(self: *Parser) ParsingError!void {
+        try self.expression();
+        self.consume(TokenType.SEMICOLON, "Expect ';' after value.");
+        try self.emit_byte(@intFromEnum(OpCode.OP_PRINT));
+    }
+
+    fn expression_statement(self: *Parser) ParsingError!void {
+        try self.expression();
+        self.consume(TokenType.SEMICOLON, "Expect ';' after value.");
+        try self.emit_byte(@intFromEnum(OpCode.OP_POP));
+    }
+
+    fn synchronize(self: *Parser) void {
+        self.panic_mode = false;
+
+        while (self.current.?.token_type != TokenType.EOF) {
+            if (self.previous.?.token_type == TokenType.SEMICOLON) {
+                return;
+            }
+
+            switch (self.current.?.token_type) {
+                TokenType.CLASS,
+                TokenType.FUN,
+                TokenType.VAR,
+                TokenType.FOR,
+                TokenType.IF,
+                TokenType.WHILE,
+                TokenType.PRINT,
+                TokenType.RETURN,
+                => return,
+                else => {},
+            }
+
+            self.advance();
+        }
+    }
+
+    fn var_declaration(self: *Parser) ParsingError!void {
+        const global = try self.parse_variable("Expect variable name.");
+
+        if (self.match(TokenType.EQUAL)) {
+            try self.expression();
+        } else {
+            try self.emit_byte(@intFromEnum(OpCode.OP_NIL));
+        }
+        self.consume(TokenType.SEMICOLON, "Expect ';' after variable declaration.");
+
+        try self.define_variable(global);
+    }
+
+    fn parse_variable(self: *Parser, err_msg: []const u8) ParsingError!u8 {
+        self.consume(TokenType.IDENTIFIER, err_msg);
+        return self.identifier_constant(self.previous.?);
+    }
+
+    fn identifier_constant(self: *Parser, token: Token) ParsingError!u8 {
+        const copy = &self.vm.copy_string(token.start[0..token.length]).obj;
+        self.vm.add_reference(copy);
+        return self.make_constant(Value.obj_val(copy));
+    }
+
+    fn define_variable(self: *Parser, global: u8) ParsingError!void {
+        return self.emit_bytes(@intFromEnum(OpCode.OP_DEFINE_GLOBAL), global);
     }
 };
 
@@ -304,8 +431,11 @@ pub fn compile(allocator: Allocator, vm: *VM, contents: []const u8, chunk: *Chun
     var parser = Parser.new(vm, &scanner, chunk);
 
     parser.advance();
-    try parser.expression();
-    parser.consume(TokenType.EOF, "Expect end of expression.");
+
+    while (!parser.match(TokenType.EOF)) {
+        try parser.declaration();
+    }
+
     try parser.end_parser();
 
     return !parser.had_error;

@@ -92,6 +92,11 @@ pub const Chunk = struct {
             @intFromEnum(OpCode.OP_EQUAL) => return utils.simple_instruction("OP_EQUAL", offset),
             @intFromEnum(OpCode.OP_GREATER) => return utils.simple_instruction("OP_GREATER", offset),
             @intFromEnum(OpCode.OP_LESS) => return utils.simple_instruction("OP_LESS", offset),
+            @intFromEnum(OpCode.OP_PRINT) => return utils.simple_instruction("OP_PRINT", offset),
+            @intFromEnum(OpCode.OP_POP) => return utils.simple_instruction("OP_POP", offset),
+            @intFromEnum(OpCode.OP_DEFINE_GLOBAL) => return utils.constant_instruction("OP_DEFINE_GLOBAL", self, offset),
+            @intFromEnum(OpCode.OP_GET_GLOBAL) => return utils.constant_instruction("OP_GET_GLOBAL", self, offset),
+            @intFromEnum(OpCode.OP_SET_GLOBAL) => return utils.constant_instruction("OP_SET_GLOBAL", self, offset),
             else => {
                 debug.print("unknown opcode {d}\n", .{instruction});
                 return offset + 1;

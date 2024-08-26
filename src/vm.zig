@@ -32,6 +32,7 @@ pub const VM = struct {
     // In the book, a linked list between objects is used to handle this.
     references: std.ArrayList(*Obj),
     strings: Table,
+    globals: Table,
     tracing: bool,
 
     pub fn new(allocator: Allocator) VM {
@@ -42,6 +43,7 @@ pub const VM = struct {
             .stack = std.ArrayList(Value).init(allocator),
             .references = std.ArrayList(*Obj).init(allocator),
             .strings = Table.new(allocator),
+            .globals = Table.new(allocator),
             .tracing = false,
         };
     }
@@ -54,6 +56,7 @@ pub const VM = struct {
         }
 
         self.strings.deinit();
+        self.globals.deinit();
         self.clean_references();
         self.references.deinit();
     }
@@ -106,6 +109,7 @@ pub const VM = struct {
                 @intFromEnum(OpCode.OP_NIL) => try self.push(Value.nil_val()),
                 @intFromEnum(OpCode.OP_FALSE) => try self.push(Value.bool_val(false)),
                 @intFromEnum(OpCode.OP_TRUE) => try self.push(Value.bool_val(true)),
+                @intFromEnum(OpCode.OP_POP) => _ = self.pop(),
                 @intFromEnum(OpCode.OP_ADD),
                 @intFromEnum(OpCode.OP_SUBSTRACT),
                 @intFromEnum(OpCode.OP_MULTIPLY),
@@ -128,13 +132,47 @@ pub const VM = struct {
                     }
                     try self.push(Value.number_val(-self.pop().as_number()));
                 },
-                @intFromEnum(OpCode.OP_RETURN) => {
+                @intFromEnum(OpCode.OP_PRINT) => {
                     print_value(self.pop());
                     debug.print("\n", .{});
+                },
+                @intFromEnum(OpCode.OP_RETURN) => {
                     return InterpretResult.OK;
                 },
                 @intFromEnum(OpCode.OP_EQUAL) => {
                     try self.push(Value.bool_val(self.pop().equals(self.pop())));
+                },
+                @intFromEnum(OpCode.OP_DEFINE_GLOBAL) => {
+                    const name = self.read_constant().as_string();
+
+                    _ = self.globals.set(name, self.peek(0));
+                    _ = self.pop();
+                },
+                @intFromEnum(OpCode.OP_GET_GLOBAL) => {
+                    const name: *Obj.String = self.read_constant().as_string();
+                    var value = Value.nil_val();
+
+                    if (!self.globals.get(name, &value)) {
+                        const err_msg = try std.fmt.allocPrint(self.allocator, "Undefined variable '{s}'.", .{name.chars});
+                        defer self.allocator.free(err_msg);
+                        self.runtime_error(err_msg);
+                        return InterpretResult.RUNTIME_ERROR;
+                    }
+
+                    try self.push(value);
+                },
+                @intFromEnum(OpCode.OP_SET_GLOBAL) => {
+                    const name: *Obj.String = self.read_constant().as_string();
+
+                    if (self.globals.set(name, self.peek(0))) {
+                        _ = self.globals.del(name);
+
+                        const err_msg = try std.fmt.allocPrint(self.allocator, "Undefined variable '{s}'.", .{name.chars});
+                        defer self.allocator.free(err_msg);
+
+                        self.runtime_error(err_msg);
+                        return InterpretResult.RUNTIME_ERROR;
+                    }
                 },
                 else => {
                     debug.print("Invalid instruction: {d}\n", .{instruction});

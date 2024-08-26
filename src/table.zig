@@ -123,7 +123,7 @@ pub const Table = struct {
         for (self.entries, 0..) |entry, idx| {
             if (entry.key != null) {
                 std.debug.print("{d} ({d}) - {s}: ", .{ idx, entry.key.?.hash, entry.key.?.chars });
-                entry.value.print();
+                entry.value.type_print();
                 std.debug.print("\n", .{});
             }
 
