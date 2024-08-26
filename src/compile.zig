@@ -15,8 +15,6 @@ const VM = @import("./vm.zig").VM;
 
 const ParsingError = @import("./errors.zig").ParsingError;
 
-const DEBUG_TRACE_EXECUTION = @import("./main.zig").DEBUG_TRACE_EXECUTION;
-
 const Precedence = enum {
     None,
     Assignement,
@@ -130,7 +128,7 @@ const Parser = struct {
     }
 
     fn end_parser(self: *Parser) !void {
-        if (!self.had_error and DEBUG_TRACE_EXECUTION) {
+        if (!self.had_error and self.vm.has_tracing()) {
             self.chunk.dissassemble("code");
         }
         try self.emit_return();

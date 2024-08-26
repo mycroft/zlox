@@ -10,8 +10,6 @@ const InterpretResult = @import("./vm.zig").InterpretResult;
 // XXX imported to run tests.
 const Table = @import("./table.zig");
 
-pub const DEBUG_TRACE_EXECUTION = true;
-
 pub fn repl(allocator: Allocator, vm: *VM) !void {
     var line: [1024]u8 = undefined;
 
@@ -60,6 +58,12 @@ pub fn main() !void {
 
     var vm = VM.new(allocator);
     defer vm.free();
+
+    var env = try std.process.getEnvMap(allocator);
+    defer env.deinit();
+    if (env.get("TRACE") != null) {
+        vm.set_trace(true);
+    }
 
     if (args.len == 1) {
         try repl(allocator, &vm);

@@ -32,6 +32,7 @@ pub const VM = struct {
     // In the book, a linked list between objects is used to handle this.
     references: std.ArrayList(*Obj),
     strings: Table,
+    tracing: bool,
 
     pub fn new(allocator: Allocator) VM {
         return VM{
@@ -41,16 +42,28 @@ pub const VM = struct {
             .stack = std.ArrayList(Value).init(allocator),
             .references = std.ArrayList(*Obj).init(allocator),
             .strings = Table.new(allocator),
+            .tracing = false,
         };
     }
 
     pub fn free(self: *VM) void {
         self.stack.deinit();
 
-        self.strings.dump();
+        if (self.has_tracing()) {
+            self.strings.dump();
+        }
+
         self.strings.deinit();
         self.clean_references();
         self.references.deinit();
+    }
+
+    pub fn set_trace(self: *VM, tracing: bool) void {
+        self.tracing = tracing;
+    }
+
+    pub fn has_tracing(self: *VM) bool {
+        return self.tracing;
     }
 
     pub fn interpret(self: *VM, allocator: Allocator, content: []const u8) !InterpretResult {
@@ -70,7 +83,7 @@ pub const VM = struct {
 
     pub fn run(self: *VM) !InterpretResult {
         while (true) {
-            if (DEBUG_TRACE_EXECUTION) {
+            if (self.has_tracing()) {
                 if (self.stack.items.len > 0) {
                     debug.print("{s:32}", .{""});
                     for (self.stack.items) |item| {
