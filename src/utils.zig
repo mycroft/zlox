@@ -40,7 +40,7 @@ pub fn jump_instruction(opcode_name: []const u8, sign: i32, chunk: Chunk, offset
 
     const address: i32 = @as(i32, @intCast(offset)) + 3 + sign * jump;
 
-    debug.print("{s:16} {d:4} -> {}", .{ opcode_name, offset, address });
+    debug.print("{s:16} {d:4} -> {x}\n", .{ opcode_name, offset, address });
     return offset + 3;
 }
 
