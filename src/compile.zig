@@ -360,6 +360,8 @@ const Parser = struct {
     fn statement(self: *Parser) ParsingError!void {
         if (self.match(TokenType.PRINT)) {
             try self.print_statement();
+        } else if (self.match(TokenType.FOR)) {
+            try self.for_statement();
         } else if (self.match(TokenType.IF)) {
             try self.if_statement();
         } else if (self.match(TokenType.WHILE)) {
@@ -643,6 +645,54 @@ const Parser = struct {
 
         try self.emit_byte(@intCast((offset >> 8) & 0xff));
         try self.emit_byte(@intCast(offset & 0xff));
+    }
+
+    fn for_statement(self: *Parser) ParsingError!void {
+        self.begin_scope();
+
+        self.consume(TokenType.LEFT_PAREN, "Expect '(' after 'for'.");
+        if (self.match(TokenType.SEMICOLON)) {
+            // No initializer
+        } else if (self.match(TokenType.VAR)) {
+            try self.var_declaration();
+        } else {
+            try self.expression_statement();
+        }
+
+        var loop_start = self.chunk.count;
+
+        var exit_jump: ?usize = null;
+
+        if (!self.match(TokenType.SEMICOLON)) {
+            try self.expression();
+            self.consume(TokenType.SEMICOLON, "Expect ';' after loop condition.");
+
+            // Jump out of the loop if the condition is false.
+            exit_jump = try self.emit_jump(@intFromEnum(OpCode.OP_JUMP_IF_FALSE));
+            _ = try self.emit_byte(@intFromEnum(OpCode.OP_POP)); // Condition
+        }
+
+        if (!self.match(TokenType.RIGHT_PAREN)) {
+            const body_jump = try self.emit_jump(@intFromEnum(OpCode.OP_JUMP));
+            const increment_start = self.chunk.count;
+            try self.expression();
+            try self.emit_byte(@intFromEnum(OpCode.OP_POP));
+            self.consume(TokenType.RIGHT_PAREN, "Expect ')' after for clauses.");
+
+            try self.emit_loop(loop_start);
+            loop_start = increment_start;
+            self.patch_jump(body_jump);
+        }
+
+        try self.statement();
+        try self.emit_loop(loop_start);
+
+        if (exit_jump != null) {
+            self.patch_jump(exit_jump.?);
+            try self.emit_byte(@intFromEnum(OpCode.OP_POP));
+        }
+
+        try self.end_scope();
     }
 };
 
