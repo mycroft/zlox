@@ -12,7 +12,7 @@ While reading [Crafting Interpreters](https://craftinginterpreters.com/), after 
 - [x] 19 - Strings
 - [x] 20 - Hash Tables
 - [x] 21 - Global Variables
-- [ ] 22 - Local Variables
+- [x] 22 - Local Variables
 - [ ] 23 - Jumping Back and Forth
 - [ ] 24 - Calls and Functions
 - [ ] 25 - Closures

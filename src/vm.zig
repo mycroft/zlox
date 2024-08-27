@@ -174,6 +174,14 @@ pub const VM = struct {
                         return InterpretResult.RUNTIME_ERROR;
                     }
                 },
+                @intFromEnum(OpCode.OP_GET_LOCAL) => {
+                    const slot = self.read_byte();
+                    try self.push(self.stack.items[slot]);
+                },
+                @intFromEnum(OpCode.OP_SET_LOCAL) => {
+                    const slot = self.read_byte();
+                    self.stack.items[slot] = self.peek(0);
+                },
                 else => {
                     debug.print("Invalid instruction: {d}\n", .{instruction});
                     return InterpretResult.RUNTIME_ERROR;

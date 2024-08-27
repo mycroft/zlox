@@ -1,0 +1,8 @@
+{
+    var a = "outer";
+    {
+        // this is reporting "Error at 'a': Can't read local variable in its own initializer."
+        var a = a;
+        print a;
+    }
+}

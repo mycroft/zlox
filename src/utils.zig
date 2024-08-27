@@ -2,6 +2,8 @@ const std = @import("std");
 const debug = std.debug;
 
 const Chunk = @import("./chunk.zig").Chunk;
+const Token = @import("./scanner.zig").Token;
+
 const print_value = @import("./values.zig").print_value;
 
 pub fn grow_capacity(capacity: usize) usize {
@@ -25,6 +27,13 @@ pub fn constant_instruction(opcode_name: []const u8, chunk: Chunk, offset: usize
     return offset + 2;
 }
 
+pub fn byte_instruction(opcode_name: []const u8, chunk: Chunk, offset: usize) usize {
+    const slot = chunk.code[offset + 1];
+    debug.print("{s:16} {d:4}\n", .{ opcode_name, slot });
+
+    return offset + 2;
+}
+
 pub fn compute_hash(str: []const u8) u32 {
     var res_hash: u32 = 2166136261;
 
@@ -34,4 +43,12 @@ pub fn compute_hash(str: []const u8) u32 {
     }
 
     return res_hash;
+}
+
+pub fn identifiers_equals(a: Token, b: Token) bool {
+    if (a.length != b.length) {
+        return false;
+    }
+
+    return std.mem.eql(u8, a.start[0..a.length], b.start[0..b.length]);
 }

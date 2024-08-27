@@ -1,0 +1,20 @@
+// This is showing:
+//
+// global
+// outer
+// inner
+// outer
+// global
+
+var a = "global";
+{
+    print "in outer block: " + a;
+    var a = "outer";
+    {
+        print "in inner block: " + a;
+        var a = "inner";
+        print "in inner block: " + a;
+    }
+    print "in outer block: " + a;
+}
+print "global: " + a;
