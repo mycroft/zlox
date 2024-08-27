@@ -362,6 +362,8 @@ const Parser = struct {
             try self.print_statement();
         } else if (self.match(TokenType.IF)) {
             try self.if_statement();
+        } else if (self.match(TokenType.WHILE)) {
+            try self.while_statement();
         } else if (self.match(TokenType.LEFT_BRACE)) {
             self.begin_scope();
             try self.block();
@@ -615,6 +617,32 @@ const Parser = struct {
 
         try self.parse_precedence(Precedence.Or);
         self.patch_jump(end_jump);
+    }
+
+    fn while_statement(self: *Parser) ParsingError!void {
+        const loop_start = self.chunk.count;
+        self.consume(TokenType.LEFT_PAREN, "Expect '(' after 'while'.");
+        try self.expression();
+        self.consume(TokenType.RIGHT_PAREN, "Expect ')' after condition.");
+
+        const exit_jump = try self.emit_jump(@intFromEnum(OpCode.OP_JUMP_IF_FALSE));
+        try self.emit_byte(@intFromEnum(OpCode.OP_POP));
+        try self.statement();
+        try self.emit_loop(loop_start);
+        self.patch_jump(exit_jump);
+        try self.emit_byte(@intFromEnum(OpCode.OP_POP));
+    }
+
+    fn emit_loop(self: *Parser, loop_start: usize) ParsingError!void {
+        try self.emit_byte(@intFromEnum(OpCode.OP_LOOP));
+
+        const offset = self.chunk.count - loop_start + 2;
+        if (offset > 65536) {
+            self.error_msg("Loop body too large.");
+        }
+
+        try self.emit_byte(@intCast((offset >> 8) & 0xff));
+        try self.emit_byte(@intCast(offset & 0xff));
     }
 };
 

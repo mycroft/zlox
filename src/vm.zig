@@ -192,6 +192,10 @@ pub const VM = struct {
                         self.ip.? += offset;
                     }
                 },
+                @intFromEnum(OpCode.OP_LOOP) => {
+                    const offset = self.read_short();
+                    self.ip.? -= offset;
+                },
                 else => {
                     debug.print("Invalid instruction: {d}\n", .{instruction});
                     return InterpretResult.RUNTIME_ERROR;
