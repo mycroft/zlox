@@ -182,6 +182,16 @@ pub const VM = struct {
                     const slot = self.read_byte();
                     self.stack.items[slot] = self.peek(0);
                 },
+                @intFromEnum(OpCode.OP_JUMP) => {
+                    const offset = self.read_short();
+                    self.ip.? += offset;
+                },
+                @intFromEnum(OpCode.OP_JUMP_IF_FALSE) => {
+                    const offset = self.read_short();
+                    if (self.peek(0).is_falsey()) {
+                        self.ip.? += offset;
+                    }
+                },
                 else => {
                     debug.print("Invalid instruction: {d}\n", .{instruction});
                     return InterpretResult.RUNTIME_ERROR;
@@ -199,6 +209,12 @@ pub const VM = struct {
         self.ip.? += 1;
 
         return ret;
+    }
+
+    pub fn read_short(self: *VM) u16 {
+        self.ip.? += 2;
+
+        return (@as(u16, self.chunk.?.code[self.ip.? - 2]) << 8) | (@as(u16, self.chunk.?.code[self.ip.? - 1]));
     }
 
     pub fn read_constant(self: *VM) Value {

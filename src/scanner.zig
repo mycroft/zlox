@@ -330,7 +330,7 @@ pub const Scanner = struct {
             },
             'i' => self.check_keyword(1, 1, "f", TokenType.IF),
             'n' => self.check_keyword(1, 2, "il", TokenType.NIL),
-            'o' => self.check_keyword(1, 1, "or", TokenType.OR),
+            'o' => self.check_keyword(1, 1, "r", TokenType.OR),
             'p' => self.check_keyword(1, 4, "rint", TokenType.PRINT),
             'r' => self.check_keyword(1, 5, "eturn", TokenType.RETURN),
             's' => self.check_keyword(1, 4, "uper", TokenType.SUPER),

@@ -250,7 +250,7 @@ const Parser = struct {
             TokenType.IDENTIFIER => ParserRule{ .prefix = variable, .infix = null, .precedence = Precedence.None },
             TokenType.STRING => ParserRule{ .prefix = string, .infix = null, .precedence = Precedence.None },
             TokenType.NUMBER => ParserRule{ .prefix = number, .infix = null, .precedence = Precedence.None },
-            TokenType.AND => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+            TokenType.AND => ParserRule{ .prefix = null, .infix = and_, .precedence = Precedence.And },
             TokenType.CLASS => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.ELSE => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.FALSE => ParserRule{ .prefix = literal, .infix = null, .precedence = Precedence.None },
@@ -258,7 +258,7 @@ const Parser = struct {
             TokenType.FUN => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.IF => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.NIL => ParserRule{ .prefix = literal, .infix = null, .precedence = Precedence.None },
-            TokenType.OR => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+            TokenType.OR => ParserRule{ .prefix = null, .infix = or_, .precedence = Precedence.Or },
             TokenType.PRINT => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.RETURN => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.SUPER => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
@@ -360,6 +360,8 @@ const Parser = struct {
     fn statement(self: *Parser) ParsingError!void {
         if (self.match(TokenType.PRINT)) {
             try self.print_statement();
+        } else if (self.match(TokenType.IF)) {
+            try self.if_statement();
         } else if (self.match(TokenType.LEFT_BRACE)) {
             self.begin_scope();
             try self.block();
@@ -551,6 +553,68 @@ const Parser = struct {
         }
 
         return ParsingError.NotFound;
+    }
+
+    fn if_statement(self: *Parser) !void {
+        self.consume(TokenType.LEFT_PAREN, "Expect '(' after 'if'.");
+        try self.expression();
+        self.consume(TokenType.RIGHT_PAREN, "Expect ')' after condition.");
+
+        const then_jump = try self.emit_jump(@intFromEnum(OpCode.OP_JUMP_IF_FALSE));
+        try self.emit_byte(@intFromEnum(OpCode.OP_POP));
+        try self.statement();
+        const else_jump = try self.emit_jump(@intFromEnum(OpCode.OP_JUMP));
+
+        self.patch_jump(then_jump);
+        try self.emit_byte(@intFromEnum(OpCode.OP_POP));
+
+        if (self.match(TokenType.ELSE)) {
+            try self.statement();
+        }
+        self.patch_jump(else_jump);
+    }
+
+    fn emit_jump(self: *Parser, instruction: u8) ParsingError!usize {
+        try self.emit_byte(instruction);
+        try self.emit_byte(0xff);
+        try self.emit_byte(0xff);
+
+        return self.chunk.count - 2;
+    }
+
+    fn patch_jump(self: *Parser, offset: usize) void {
+        const jump = self.chunk.count - offset - 2;
+
+        if (jump > 65535) {
+            self.error_msg("Too much code to jump over.");
+        }
+
+        const b1 = (jump >> 8) & 0xff;
+        const b0 = jump & 0xff;
+
+        self.chunk.code[offset] = @intCast(b1);
+        self.chunk.code[offset + 1] = @intCast(b0);
+    }
+
+    fn and_(self: *Parser, can_assign: bool) ParsingError!void {
+        _ = can_assign;
+        const end_jump = try self.emit_jump(@intFromEnum(OpCode.OP_JUMP_IF_FALSE));
+        try self.emit_byte(@intFromEnum(OpCode.OP_POP));
+
+        try self.parse_precedence(Precedence.And);
+        self.patch_jump(end_jump);
+    }
+
+    fn or_(self: *Parser, can_assign: bool) ParsingError!void {
+        _ = can_assign;
+        const else_jump = try self.emit_jump(@intFromEnum(OpCode.OP_JUMP_IF_FALSE));
+        const end_jump = try self.emit_jump(@intFromEnum(OpCode.OP_JUMP));
+
+        self.patch_jump(else_jump);
+        try self.emit_byte(@intFromEnum(OpCode.OP_POP));
+
+        try self.parse_precedence(Precedence.Or);
+        self.patch_jump(end_jump);
     }
 };
 

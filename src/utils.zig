@@ -34,6 +34,16 @@ pub fn byte_instruction(opcode_name: []const u8, chunk: Chunk, offset: usize) us
     return offset + 2;
 }
 
+pub fn jump_instruction(opcode_name: []const u8, sign: i32, chunk: Chunk, offset: usize) usize {
+    var jump: u16 = @as(u16, chunk.code[offset + 1]) << 8;
+    jump |= chunk.code[offset + 2];
+
+    const address: i32 = @as(i32, @intCast(offset)) + 3 + sign * jump;
+
+    debug.print("{s:16} {d:4} -> {}", .{ opcode_name, offset, address });
+    return offset + 3;
+}
+
 pub fn compute_hash(str: []const u8) u32 {
     var res_hash: u32 = 2166136261;
 

@@ -1,0 +1,7 @@
+if (true) {
+    print "first is true!";
+}
+
+if (false) {
+    print "second if false!";
+}

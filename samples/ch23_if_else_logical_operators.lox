@@ -1,0 +1,31 @@
+print "and...";
+
+if (true and true) {
+    print "should show";
+}
+
+if (true and false) {
+    print "should not show";
+}
+
+if (false and true) {
+    print "should not show";
+}
+
+if (false and false) {
+    print "should not show";
+}
+
+print "or...";
+if (true or true) {
+    print "should show";
+}
+if (true or false) {
+    print "should show";
+}
+if (false or true) {
+    print "should show";
+}
+if (false or false) {
+    print "should show";
+}

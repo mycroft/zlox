@@ -99,6 +99,8 @@ pub const Chunk = struct {
             @intFromEnum(OpCode.OP_SET_GLOBAL) => return utils.constant_instruction("OP_SET_GLOBAL", self, offset),
             @intFromEnum(OpCode.OP_GET_LOCAL) => return utils.byte_instruction("OP_GET_LOCAL", self, offset),
             @intFromEnum(OpCode.OP_SET_LOCAL) => return utils.byte_instruction("OP_SET_LOCAL", self, offset),
+            @intFromEnum(OpCode.OP_JUMP) => return utils.jump_instruction("OP_JUMP", 1, self, offset),
+            @intFromEnum(OpCode.OP_JUMP_IF_FALSE) => return utils.jump_instruction("OP_JUMP_IF_FALSE", 1, self, offset),
             else => {
                 debug.print("unknown opcode {d}\n", .{instruction});
                 return offset + 1;
