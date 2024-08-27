@@ -2,13 +2,13 @@ const std = @import("std");
 const debug = std.debug;
 const Allocator = std.mem.Allocator;
 
+const constants = @import("./constant.zig");
+
 const Obj = @import("./object.zig").Obj;
 const Value = @import("./values.zig").Value;
 
 const grow_capacity = @import("./utils.zig").grow_capacity;
 const compute_hash = @import("./utils.zig").compute_hash;
-
-const TABLE_MAX_LOAD = 0.75;
 
 const Entry = struct {
     key: ?*Obj.String,
@@ -42,7 +42,7 @@ pub const Table = struct {
         const current_count: f32 = @floatFromInt(self.count + 1);
         const current_capacity: f32 = @floatFromInt(self.capacity);
 
-        if (current_count > current_capacity * TABLE_MAX_LOAD) {
+        if (current_count > current_capacity * constants.TABLE_MAX_LOAD) {
             const capacity = grow_capacity(self.capacity);
             self.adjust_capacity(capacity);
         }

@@ -2,6 +2,8 @@ const std = @import("std");
 const debug = std.debug;
 const Allocator = std.mem.Allocator;
 
+const constants = @import("./constant.zig");
+
 const Chunk = @import("./chunk.zig").Chunk;
 const OpCode = @import("./opcode.zig").OpCode;
 const Value = @import("./values.zig").Value;
@@ -14,8 +16,6 @@ const compute_hash = @import("./utils.zig").compute_hash;
 const DEBUG_TRACE_EXECUTION = @import("./main.zig").DEBUG_TRACE_EXECUTION;
 
 const print_value = @import("./values.zig").print_value;
-
-const STACK_MAX = 256;
 
 pub const InterpretResult = enum {
     OK,

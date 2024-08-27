@@ -2,6 +2,8 @@ const std = @import("std");
 const debug = std.debug;
 const Allocator = std.mem.Allocator;
 
+const constants = @import("./constant.zig");
+
 const Obj = @import("./object.zig").Obj;
 const ObjType = @import("./object.zig").ObjType;
 
@@ -161,7 +163,7 @@ const Parser = struct {
 
     fn make_constant(self: *Parser, value: Value) !u8 {
         const constant = try self.chunk.add_constant(value);
-        if (constant > 256) {
+        if (constant > constants.UINT8_MAX) {
             self.error_msg("Too many constants in one chunk.");
             return 0;
         }
@@ -521,7 +523,7 @@ const Parser = struct {
     }
 
     fn add_local(self: *Parser, token: Token) void {
-        if (self.compiler.local_count == 256) {
+        if (self.compiler.local_count == constants.UINT8_COUNT) {
             self.error_msg("Too many local variables in function.");
             return;
         }
@@ -589,7 +591,7 @@ const Parser = struct {
     fn patch_jump(self: *Parser, offset: usize) void {
         const jump = self.chunk.count - offset - 2;
 
-        if (jump > 65535) {
+        if (jump > constants.UINT16_MAX) {
             self.error_msg("Too much code to jump over.");
         }
 
@@ -639,7 +641,7 @@ const Parser = struct {
         try self.emit_byte(@intFromEnum(OpCode.OP_LOOP));
 
         const offset = self.chunk.count - loop_start + 2;
-        if (offset > 65536) {
+        if (offset > constants.UINT16_MAX) {
             self.error_msg("Loop body too large.");
         }
 
@@ -697,7 +699,7 @@ const Parser = struct {
 };
 
 const Compiler = struct {
-    locals: [256]Local,
+    locals: [constants.UINT8_COUNT]Local,
     local_count: usize,
     scope_depth: usize,
 
