@@ -14,14 +14,14 @@ pub fn grow_capacity(capacity: usize) usize {
 }
 
 pub fn simple_instruction(opcode_name: []const u8, offset: usize) usize {
-    debug.print("{s:16}\n", .{opcode_name});
+    debug.print("{s:<16}\n", .{opcode_name});
 
     return offset + 1;
 }
 
 pub fn constant_instruction(opcode_name: []const u8, chunk: Chunk, offset: usize) usize {
     const constant = chunk.code[offset + 1];
-    debug.print("{s:16} {d:4} '", .{ opcode_name, constant });
+    debug.print("{s:<16} {d:4} '", .{ opcode_name, constant });
     print_value(chunk.constants.values[constant]);
     debug.print("'\n", .{});
     return offset + 2;
@@ -29,7 +29,7 @@ pub fn constant_instruction(opcode_name: []const u8, chunk: Chunk, offset: usize
 
 pub fn byte_instruction(opcode_name: []const u8, chunk: Chunk, offset: usize) usize {
     const slot = chunk.code[offset + 1];
-    debug.print("{s:16} {d:4}\n", .{ opcode_name, slot });
+    debug.print("{s:<16} {d:4}\n", .{ opcode_name, slot });
 
     return offset + 2;
 }
@@ -40,7 +40,7 @@ pub fn jump_instruction(opcode_name: []const u8, sign: i32, chunk: Chunk, offset
 
     const address: i32 = @as(i32, @intCast(offset)) + 3 + sign * jump;
 
-    debug.print("{s:16} {d:4} -> {x}\n", .{ opcode_name, offset, address });
+    debug.print("{s:<16} {d:4} -> {d}\n", .{ opcode_name, offset, address });
     return offset + 3;
 }
 

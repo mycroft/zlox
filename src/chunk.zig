@@ -67,7 +67,7 @@ pub const Chunk = struct {
     }
 
     pub fn dissassemble_instruction(self: Chunk, offset: usize) usize {
-        debug.print("{x:0>4} ", .{offset});
+        debug.print("{d:0>4} ", .{offset});
 
         if (offset > 0 and self.lines[offset] == self.lines[offset - 1]) {
             debug.print("   | ", .{});

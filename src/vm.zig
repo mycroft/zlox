@@ -97,7 +97,7 @@ pub const VM = struct {
         while (true) {
             if (constants.DEBUG_TRACE_EXECUTION) {
                 if (self.stack_top > 0) {
-                    debug.print("{s:32}", .{""});
+                    debug.print("{s:10}", .{""});
                     for (0..self.stack_top) |item_idx| {
                         debug.print("[ ", .{});
                         print_value(self.stack[item_idx]);
