@@ -13,8 +13,6 @@ const Table = @import("./table.zig").Table;
 const compile = @import("./compile.zig").compile;
 const compute_hash = @import("./utils.zig").compute_hash;
 
-const DEBUG_TRACE_EXECUTION = @import("./main.zig").DEBUG_TRACE_EXECUTION;
-
 const print_value = @import("./values.zig").print_value;
 
 pub const InterpretResult = enum {
@@ -23,10 +21,15 @@ pub const InterpretResult = enum {
     RUNTIME_ERROR,
 };
 
+pub const CallFrame = struct {
+    function: *Obj.Function,
+    ip: usize,
+    // pointer to stack index provided to this frame
+    slots_idx: usize,
+};
+
 pub const VM = struct {
     allocator: Allocator,
-    chunk: ?*Chunk,
-    ip: ?usize,
     stack: [constants.STACK_MAX]Value,
     stack_top: usize,
     // Keeping creating objects in references to destroy objects on cleaning.
@@ -34,24 +37,24 @@ pub const VM = struct {
     references: std.ArrayList(*Obj),
     strings: Table,
     globals: Table,
-    tracing: bool,
+    frames: [constants.FRAMES_MAX]CallFrame,
+    frame_count: usize,
 
     pub fn new(allocator: Allocator) VM {
         return VM{
             .allocator = allocator,
-            .chunk = null,
-            .ip = null,
             .stack = undefined,
             .stack_top = 0,
             .references = std.ArrayList(*Obj).init(allocator),
             .strings = Table.new(allocator),
             .globals = Table.new(allocator),
-            .tracing = false,
+            .frames = undefined,
+            .frame_count = 0,
         };
     }
 
     pub fn free(self: *VM) void {
-        if (self.has_tracing()) {
+        if (constants.DEBUG_PRINT_INTERNAL_STRINGS) {
             self.strings.dump();
         }
 
@@ -62,35 +65,37 @@ pub const VM = struct {
     }
 
     inline fn current_chunk(self: *VM) *Chunk {
-        return self.chunk.?;
+        return &self.frames[self.frame_count - 1].function.chunk;
     }
 
-    pub fn set_trace(self: *VM, tracing: bool) void {
-        self.tracing = tracing;
-    }
-
-    pub fn has_tracing(self: *VM) bool {
-        return self.tracing;
+    inline fn current_frame(self: *VM) *CallFrame {
+        return &self.frames[self.frame_count - 1];
     }
 
     pub fn interpret(self: *VM, allocator: Allocator, content: []const u8) !InterpretResult {
         var chunk = Chunk.new(allocator);
         defer chunk.deinit();
 
-        const res = try compile(allocator, self, content, &chunk);
-        if (!res) {
+        const function = try compile(allocator, self, content);
+        if (function == null) {
             return InterpretResult.COMPILE_ERROR;
         }
+        defer function.?.destroy();
 
-        self.chunk = &chunk;
-        self.ip = 0;
+        _ = try self.push(Value.obj_val(&function.?.obj));
+
+        const frame = &self.frames[self.frame_count];
+        self.frame_count += 1;
+        frame.function = function.?;
+        frame.ip = 0;
+        frame.slots_idx = self.stack_top;
 
         return try self.run();
     }
 
     pub fn run(self: *VM) !InterpretResult {
         while (true) {
-            if (self.has_tracing()) {
+            if (constants.DEBUG_TRACE_EXECUTION) {
                 if (self.stack_top > 0) {
                     debug.print("{s:32}", .{""});
                     for (0..self.stack_top) |item_idx| {
@@ -100,7 +105,7 @@ pub const VM = struct {
                     }
                     debug.print("\n", .{});
                 }
-                _ = self.current_chunk().dissassemble_instruction(self.ip.?);
+                _ = self.current_chunk().dissassemble_instruction(self.current_frame().ip);
             }
 
             const instruction = self.read_byte();
@@ -180,25 +185,25 @@ pub const VM = struct {
                 },
                 @intFromEnum(OpCode.OP_GET_LOCAL) => {
                     const slot = self.read_byte();
-                    try self.push(self.stack[slot]);
+                    try self.push(self.stack[self.current_frame().slots_idx + slot - 1]);
                 },
                 @intFromEnum(OpCode.OP_SET_LOCAL) => {
                     const slot = self.read_byte();
-                    self.stack[slot] = self.peek(0);
+                    self.stack[self.current_frame().slots_idx + slot - 1] = self.peek(0);
                 },
                 @intFromEnum(OpCode.OP_JUMP) => {
                     const offset = self.read_short();
-                    self.ip.? += offset;
+                    self.current_frame().ip += offset;
                 },
                 @intFromEnum(OpCode.OP_JUMP_IF_FALSE) => {
                     const offset = self.read_short();
                     if (self.peek(0).is_falsey()) {
-                        self.ip.? += offset;
+                        self.current_frame().ip += offset;
                     }
                 },
                 @intFromEnum(OpCode.OP_LOOP) => {
                     const offset = self.read_short();
-                    self.ip.? -= offset;
+                    self.current_frame().ip -= offset;
                 },
                 else => {
                     debug.print("Invalid instruction: {d}\n", .{instruction});
@@ -213,16 +218,16 @@ pub const VM = struct {
     // XXX In the book, we're using a ptr to data directly, to avoid dereferencing to a given offset
     // How to do that in Zig?
     pub fn read_byte(self: *VM) u8 {
-        const ret = self.current_chunk().code[self.ip.?];
-        self.ip.? += 1;
+        const ret = self.current_chunk().code[self.current_frame().ip];
+        self.current_frame().ip += 1;
 
         return ret;
     }
 
     pub fn read_short(self: *VM) u16 {
-        self.ip.? += 2;
+        self.current_frame().ip += 2;
 
-        return (@as(u16, self.current_chunk().code[self.ip.? - 2]) << 8) | (@as(u16, self.current_chunk().code[self.ip.? - 1]));
+        return (@as(u16, self.current_chunk().code[self.current_frame().ip - 2]) << 8) | (@as(u16, self.current_chunk().code[self.current_frame().ip - 1]));
     }
 
     pub fn read_constant(self: *VM) Value {
@@ -287,7 +292,7 @@ pub const VM = struct {
     }
 
     pub fn runtime_error(self: *VM, err_msg: []const u8) void {
-        const instruction = self.ip.?;
+        const instruction = self.current_frame().ip;
         const line = self.current_chunk().lines[instruction];
 
         debug.print("err: {s}\n", .{err_msg});

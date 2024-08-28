@@ -2,6 +2,8 @@ const std = @import("std");
 const debug = std.debug;
 const Allocator = std.mem.Allocator;
 
+const constants = @import("./constant.zig");
+
 const Chunk = @import("./chunk.zig").Chunk;
 const OpCode = @import("./opcode.zig").OpCode;
 const VM = @import("./vm.zig").VM;
@@ -17,7 +19,7 @@ pub fn repl(allocator: Allocator, vm: *VM) !void {
     const stdout = std.io.getStdOut().writer();
 
     while (true) {
-        if (vm.has_tracing()) {
+        if (constants.DEBUG_PRINT_GLOBALS) {
             vm.globals.dump();
         }
 
@@ -62,12 +64,6 @@ pub fn main() !void {
 
     var vm = VM.new(allocator);
     defer vm.free();
-
-    var env = try std.process.getEnvMap(allocator);
-    defer env.deinit();
-    if (env.get("TRACE") != null) {
-        vm.set_trace(true);
-    }
 
     if (args.len == 1) {
         try repl(allocator, &vm);

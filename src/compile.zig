@@ -46,10 +46,9 @@ const Parser = struct {
     scanner: *Scanner,
     had_error: bool,
     panic_mode: bool,
-    chunk: *Chunk,
     vm: *VM,
 
-    fn new(vm: *VM, compiler: *Compiler, scanner: *Scanner, chunk: *Chunk) Parser {
+    fn new(vm: *VM, compiler: *Compiler, scanner: *Scanner) Parser {
         return Parser{
             .compiler = compiler,
             .current = null,
@@ -57,13 +56,12 @@ const Parser = struct {
             .scanner = scanner,
             .had_error = false,
             .panic_mode = false,
-            .chunk = chunk,
             .vm = vm,
         };
     }
 
     inline fn current_chunk(self: *Parser) *Chunk {
-        return self.chunk;
+        return &self.compiler.function.chunk;
     }
 
     fn advance(self: *Parser) void {
@@ -137,11 +135,14 @@ const Parser = struct {
         try self.emit_byte(@intFromEnum(OpCode.OP_RETURN));
     }
 
-    fn end_parser(self: *Parser) !void {
-        if (!self.had_error and self.vm.has_tracing()) {
+    fn end_parser(self: *Parser) !*Obj.Function {
+        if (!self.had_error and constants.DEBUG_PRINT_CODE) {
             self.current_chunk().dissassemble("code");
         }
+
         try self.emit_return();
+
+        return self.compiler.function;
     }
 
     fn number(self: *Parser, can_assign: bool) ParsingError!void {
@@ -702,17 +703,41 @@ const Parser = struct {
     }
 };
 
+const FunctionType = enum {
+    Function,
+    Script,
+};
+
 const Compiler = struct {
+    function: *Obj.Function,
+    function_type: FunctionType,
+
     locals: [constants.UINT8_COUNT]Local,
     local_count: usize,
     scope_depth: usize,
 
-    fn new() Compiler {
-        return Compiler{
+    fn new(allocator: std.mem.Allocator, function_type: FunctionType) Compiler {
+        const obj_function = Obj.Function.new(allocator);
+
+        var compiler = Compiler{
             .locals = undefined,
             .local_count = 0,
             .scope_depth = 0,
+            .function = obj_function,
+            .function_type = function_type,
         };
+
+        compiler.locals[0].depth = 0;
+        compiler.locals[0].name = Token{
+            .token_type = TokenType.EOF,
+            .start = "",
+            .length = 0,
+            .line = 0,
+        };
+
+        compiler.local_count += 1;
+
+        return compiler;
     }
 };
 
@@ -721,13 +746,11 @@ const Local = struct {
     depth: ?usize,
 };
 
-pub fn compile(allocator: Allocator, vm: *VM, contents: []const u8, chunk: *Chunk) !bool {
-    _ = allocator;
-
-    var compiler = Compiler.new();
+pub fn compile(allocator: Allocator, vm: *VM, contents: []const u8) !?*Obj.Function {
+    var compiler = Compiler.new(allocator, FunctionType.Script);
 
     var scanner = Scanner.init(contents);
-    var parser = Parser.new(vm, &compiler, &scanner, chunk);
+    var parser = Parser.new(vm, &compiler, &scanner);
 
     parser.advance();
 
@@ -735,7 +758,11 @@ pub fn compile(allocator: Allocator, vm: *VM, contents: []const u8, chunk: *Chun
         try parser.declaration();
     }
 
-    try parser.end_parser();
+    const function = try parser.end_parser();
 
-    return !parser.had_error;
+    if (!parser.had_error) {
+        return function;
+    } else {
+        return null;
+    }
 }

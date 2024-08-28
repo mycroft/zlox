@@ -45,8 +45,8 @@ pub const Obj = struct {
     pub const Function = struct {
         obj: Obj,
         arity: usize,
-        chunk: *Chunk,
-        name: *Obj.String,
+        chunk: Chunk,
+        name: ?*Obj.String,
 
         pub fn new(allocator: std.mem.Allocator) *Function {
             const obj = Obj{
@@ -58,6 +58,7 @@ pub const Obj = struct {
             function_obj.obj = obj;
             function_obj.arity = 0;
             function_obj.chunk = Chunk.new(allocator);
+            function_obj.name = null;
 
             return function_obj;
         }
@@ -89,7 +90,11 @@ pub const Obj = struct {
             },
             ObjType.Function => {
                 const obj = self.as_function();
-                debug.print("<fn {s}>", .{obj.name.chars});
+                if (obj.name == null) {
+                    debug.print("<script>", .{});
+                } else {
+                    debug.print("<fn {s}>", .{obj.name.?.chars});
+                }
             },
         }
     }
