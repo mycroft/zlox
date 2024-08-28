@@ -12,7 +12,7 @@ const InterpretResult = @import("./vm.zig").InterpretResult;
 // XXX imported to run tests.
 const Table = @import("./table.zig");
 
-pub fn repl(allocator: Allocator, vm: *VM) !void {
+pub fn repl(vm: *VM) !void {
     var line: [1024]u8 = undefined;
 
     const stdin = std.io.getStdIn().reader();
@@ -34,7 +34,7 @@ pub fn repl(allocator: Allocator, vm: *VM) !void {
             break;
         }
 
-        _ = try vm.interpret(allocator, &line);
+        _ = try vm.interpret(&line);
     }
 }
 
@@ -45,7 +45,7 @@ pub fn run_file(allocator: Allocator, vm: *VM, filepath: []const u8) !void {
     const file_content = try file.readToEndAlloc(allocator, 1024 * 1024);
     defer allocator.free(file_content);
 
-    const result = try vm.interpret(allocator, file_content);
+    const result = try vm.interpret(file_content);
 
     switch (result) {
         InterpretResult.COMPILE_ERROR => std.process.exit(65),
@@ -55,7 +55,7 @@ pub fn run_file(allocator: Allocator, vm: *VM, filepath: []const u8) !void {
 }
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{ .safety = true }){};
+    var gpa = std.heap.GeneralPurposeAllocator(.{ .safety = false }){};
     defer _ = debug.assert(gpa.deinit() == .ok);
     const allocator = gpa.allocator();
 
@@ -66,7 +66,7 @@ pub fn main() !void {
     defer vm.destroy();
 
     if (args.len == 1) {
-        try repl(allocator, &vm);
+        try repl(&vm);
     } else if (args.len == 2) {
         try run_file(allocator, &vm, args[1]);
     } else {

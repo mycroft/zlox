@@ -44,7 +44,7 @@ pub const Obj = struct {
     pub const Function = struct {
         obj: Obj,
         arity: usize,
-        chunk: Chunk,
+        chunk: *Chunk,
         name: ?*Obj.String,
 
         pub fn new(allocator: std.mem.Allocator) *Function {

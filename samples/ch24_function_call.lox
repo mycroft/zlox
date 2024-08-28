@@ -1,0 +1,9 @@
+fun helloWorld(var_str, var_int) {
+    var b = 1;
+    print var_str + " blah";
+
+    return b + var_int;
+}
+
+var c = helloWorld("a", 42);
+print c;

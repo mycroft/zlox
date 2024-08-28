@@ -10,22 +10,25 @@ const grow_capacity = @import("./utils.zig").grow_capacity;
 const utils = @import("./utils.zig");
 
 pub const Chunk = struct {
+    allocator: Allocator,
+
     count: usize,
     capacity: usize,
     code: []u8,
     lines: []usize,
     constants: ValueArray,
-    allocator: Allocator,
 
-    pub fn new(allocator: Allocator) Chunk {
-        return Chunk{
-            .count = 0,
-            .capacity = 0,
-            .code = &.{},
-            .lines = &.{},
-            .constants = ValueArray.new(allocator),
-            .allocator = allocator,
-        };
+    pub fn new(allocator: Allocator) *Chunk {
+        var chunk: *Chunk = allocator.create(Chunk) catch unreachable;
+
+        chunk.allocator = allocator;
+        chunk.count = 0;
+        chunk.capacity = 0;
+        chunk.code = &.{};
+        chunk.lines = &.{};
+        chunk.constants = ValueArray.new(allocator);
+
+        return chunk;
     }
 
     pub fn destroy(self: *Chunk) void {
@@ -35,6 +38,8 @@ pub const Chunk = struct {
             self.allocator.free(self.code);
             self.allocator.free(self.lines);
         }
+
+        self.allocator.destroy(self);
     }
 
     pub fn write(self: *Chunk, byte: u8, line: usize) !void {
@@ -50,8 +55,17 @@ pub const Chunk = struct {
         self.count += 1;
     }
 
-    pub fn dump(self: Chunk) void {
+    pub fn dump(self: *Chunk) void {
+        debug.print("== chunk dump of {*} ==\n", .{self});
         debug.print("{any}\n", .{self});
+
+        for (0..self.constants.count) |idx| {
+            debug.print("constant {d}: {*} ", .{ idx, &self.constants.values[idx] });
+            self.constants.values[idx].print();
+            debug.print("\n", .{});
+        }
+
+        debug.print("== end of chunk dump \n\n", .{});
     }
 
     pub fn dissassemble(self: Chunk, name: []const u8) void {
@@ -101,6 +115,7 @@ pub const Chunk = struct {
             @intFromEnum(OpCode.OP_JUMP) => return utils.jump_instruction("OP_JUMP", 1, self, offset),
             @intFromEnum(OpCode.OP_JUMP_IF_FALSE) => return utils.jump_instruction("OP_JUMP_IF_FALSE", 1, self, offset),
             @intFromEnum(OpCode.OP_LOOP) => return utils.jump_instruction("OP_LOOP", -1, self, offset),
+            @intFromEnum(OpCode.OP_CALL) => return utils.byte_instruction("OP_CALL", self, offset),
             else => {
                 debug.print("unknown opcode {d}\n", .{instruction});
                 return offset + 1;

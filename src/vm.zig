@@ -8,6 +8,7 @@ const Chunk = @import("./chunk.zig").Chunk;
 const OpCode = @import("./opcode.zig").OpCode;
 const Value = @import("./values.zig").Value;
 const Obj = @import("./object.zig").Obj;
+const ObjType = @import("./object.zig").ObjType;
 const Table = @import("./table.zig").Table;
 
 const compile = @import("./compile.zig").compile;
@@ -65,30 +66,22 @@ pub const VM = struct {
     }
 
     inline fn current_chunk(self: *VM) *Chunk {
-        return &self.frames[self.frame_count - 1].function.chunk;
+        return self.frames[self.frame_count - 1].function.chunk;
     }
 
     inline fn current_frame(self: *VM) *CallFrame {
         return &self.frames[self.frame_count - 1];
     }
 
-    pub fn interpret(self: *VM, allocator: Allocator, content: []const u8) !InterpretResult {
-        var chunk = Chunk.new(allocator);
-        defer chunk.destroy();
-
-        const function = try compile(self, content);
+    pub fn interpret(self: *VM, content: []const u8) !InterpretResult {
+        var function = try compile(self, content);
         if (function == null) {
             return InterpretResult.COMPILE_ERROR;
         }
         defer function.?.destroy();
 
         _ = try self.push(Value.obj_val(&function.?.obj));
-
-        const frame = &self.frames[self.frame_count];
-        self.frame_count += 1;
-        frame.function = function.?;
-        frame.ip = 0;
-        frame.slots_idx = self.stack_top;
+        _ = self.call(function.?, 0);
 
         return try self.run();
     }
@@ -146,7 +139,15 @@ pub const VM = struct {
                     debug.print("\n", .{});
                 },
                 @intFromEnum(OpCode.OP_RETURN) => {
-                    return InterpretResult.OK;
+                    const result = self.pop();
+                    self.frame_count -= 1;
+                    if (self.frame_count == 0) {
+                        _ = self.pop();
+                        return InterpretResult.OK;
+                    }
+
+                    self.stack_top = self.frames[self.frame_count].slots_idx;
+                    try self.push(result);
                 },
                 @intFromEnum(OpCode.OP_EQUAL) => {
                     try self.push(Value.bool_val(self.pop().equals(self.pop())));
@@ -185,11 +186,11 @@ pub const VM = struct {
                 },
                 @intFromEnum(OpCode.OP_GET_LOCAL) => {
                     const slot = self.read_byte();
-                    try self.push(self.stack[self.current_frame().slots_idx + slot - 1]);
+                    try self.push(self.stack[self.current_frame().slots_idx + slot]);
                 },
                 @intFromEnum(OpCode.OP_SET_LOCAL) => {
                     const slot = self.read_byte();
-                    self.stack[self.current_frame().slots_idx + slot - 1] = self.peek(0);
+                    self.stack[self.current_frame().slots_idx + slot] = self.peek(0);
                 },
                 @intFromEnum(OpCode.OP_JUMP) => {
                     const offset = self.read_short();
@@ -204,6 +205,12 @@ pub const VM = struct {
                 @intFromEnum(OpCode.OP_LOOP) => {
                     const offset = self.read_short();
                     self.current_frame().ip -= offset;
+                },
+                @intFromEnum(OpCode.OP_CALL) => {
+                    const arg_count = self.read_byte();
+                    if (!self.call_value(self.peek(arg_count), arg_count)) {
+                        return InterpretResult.RUNTIME_ERROR;
+                    }
                 },
                 else => {
                     debug.print("Invalid instruction: {d}\n", .{instruction});
@@ -292,11 +299,28 @@ pub const VM = struct {
     }
 
     pub fn runtime_error(self: *VM, err_msg: []const u8) void {
-        const instruction = self.current_frame().ip;
-        const line = self.current_chunk().lines[instruction];
-
         debug.print("err: {s}\n", .{err_msg});
-        debug.print("[line {d}] in script\n", .{line});
+
+        var frame_idx = self.frame_count - 1;
+
+        while (true) {
+            const frame = self.frames[frame_idx];
+            const function = frame.function;
+            const instruction = frame.ip;
+
+            debug.print("[line {d}] in ", .{function.chunk.lines[instruction]});
+
+            if (function.name == null) {
+                debug.print("script\n", .{});
+            } else {
+                debug.print("{s}()\n", .{function.name.?.chars});
+            }
+
+            if (frame_idx == 0) {
+                break;
+            }
+            frame_idx -= 1;
+        }
     }
 
     pub fn add_reference(self: *VM, obj: *Obj) void {
@@ -346,5 +370,40 @@ pub const VM = struct {
         _ = self.strings.set(obj_string, Value.nil_val());
 
         return obj_string;
+    }
+
+    pub fn call_value(self: *VM, callee: Value, arg_count: usize) bool {
+        if (callee.is_obj()) {
+            switch (callee.as_obj().kind) {
+                ObjType.Function => {
+                    return self.call(callee.as_obj().as_function(), arg_count);
+                },
+                else => {},
+            }
+        }
+        self.runtime_error("Can only call functions and classes.");
+        return false;
+    }
+
+    pub fn call(self: *VM, function: *Obj.Function, arg_count: usize) bool {
+        if (arg_count != function.arity) {
+            self.runtime_error("Invalid argument count.");
+            // runtimeError("Expected %d arguments but got %d.", function->arity, argCount);
+            return false;
+        }
+
+        if (self.frame_count == constants.FRAMES_MAX) {
+            self.runtime_error("Stack overflow.");
+            return false;
+        }
+
+        const frame = &self.frames[self.frame_count];
+        self.frame_count += 1;
+
+        frame.function = function;
+        frame.ip = 0;
+        frame.slots_idx = self.stack_top - arg_count - 1;
+
+        return true;
     }
 };

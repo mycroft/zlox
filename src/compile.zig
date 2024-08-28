@@ -61,7 +61,7 @@ const Parser = struct {
     }
 
     inline fn current_chunk(self: *Parser) *Chunk {
-        return &self.compiler.function.chunk;
+        return self.compiler.function.chunk;
     }
 
     fn advance(self: *Parser) void {
@@ -132,17 +132,24 @@ const Parser = struct {
     }
 
     fn emit_return(self: *Parser) ParsingError!void {
+        try self.emit_byte(@intFromEnum(OpCode.OP_NIL));
         try self.emit_byte(@intFromEnum(OpCode.OP_RETURN));
     }
 
     fn end_parser(self: *Parser) !*Obj.Function {
+        try self.emit_return();
+
         if (!self.had_error and constants.DEBUG_PRINT_CODE) {
             self.current_chunk().dissassemble("code");
         }
 
-        try self.emit_return();
+        const function_obj = self.compiler.function;
 
-        return self.compiler.function;
+        if (self.compiler.enclosing != null) {
+            self.compiler = self.compiler.enclosing.?;
+        }
+
+        return function_obj;
     }
 
     fn number(self: *Parser, can_assign: bool) ParsingError!void {
@@ -235,7 +242,7 @@ const Parser = struct {
 
     fn get_rule(operator_type: TokenType) ParserRule {
         return switch (operator_type) {
-            TokenType.LEFT_PAREN => ParserRule{ .prefix = grouping, .infix = null, .precedence = Precedence.None },
+            TokenType.LEFT_PAREN => ParserRule{ .prefix = grouping, .infix = call, .precedence = Precedence.Call },
             TokenType.RIGHT_PAREN => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.LEFT_BRACE => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.RIGHT_BRACE => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
@@ -353,7 +360,9 @@ const Parser = struct {
     }
 
     fn declaration(self: *Parser) ParsingError!void {
-        if (self.match(TokenType.VAR)) {
+        if (self.match(TokenType.FUN)) {
+            try self.fun_declaration();
+        } else if (self.match(TokenType.VAR)) {
             try self.var_declaration();
         } else {
             try self.statement();
@@ -371,6 +380,8 @@ const Parser = struct {
             try self.for_statement();
         } else if (self.match(TokenType.IF)) {
             try self.if_statement();
+        } else if (self.match(TokenType.RETURN)) {
+            try self.return_statement();
         } else if (self.match(TokenType.WHILE)) {
             try self.while_statement();
         } else if (self.match(TokenType.LEFT_BRACE)) {
@@ -470,6 +481,9 @@ const Parser = struct {
     }
 
     fn mark_initialized(self: *Parser) void {
+        if (self.compiler.scope_depth == 0) {
+            return;
+        }
         self.compiler.locals[self.compiler.local_count - 1].depth = self.compiler.scope_depth;
     }
 
@@ -701,6 +715,93 @@ const Parser = struct {
 
         try self.end_scope();
     }
+
+    fn fun_declaration(self: *Parser) ParsingError!void {
+        const global: u8 = try self.parse_variable("Expect function name.");
+        self.mark_initialized();
+        try self.function(FunctionType.Function);
+        try self.define_variable(global);
+    }
+
+    fn function(self: *Parser, function_type: FunctionType) ParsingError!void {
+        var compiler = Compiler.new(self.vm.allocator, self.compiler, function_type);
+
+        self.compiler = &compiler;
+        if (function_type != FunctionType.Script) {
+            self.compiler.function.name = self.vm.copy_string(self.previous.?.start[0..self.previous.?.length]);
+        }
+
+        self.begin_scope();
+
+        self.consume(TokenType.LEFT_PAREN, "Expect '(' after function name.");
+        if (!self.check(TokenType.RIGHT_PAREN)) {
+            while (true) {
+                self.compiler.function.arity += 1;
+                if (self.compiler.function.arity > 255) {
+                    self.error_at_current("Can't have more than 255 parameters.");
+                }
+
+                const constant = try self.parse_variable("Expect parameter name.");
+                try self.define_variable(constant);
+                if (!self.match(TokenType.COMMA)) {
+                    break;
+                }
+            }
+        }
+
+        self.consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.");
+        self.consume(TokenType.LEFT_BRACE, "Expect '{' before function body.");
+
+        try self.block();
+
+        const obj_function = try self.end_parser();
+
+        const constant = try self.make_constant(Value.obj_val(&obj_function.obj));
+        try self.emit_bytes(@intFromEnum(OpCode.OP_CONSTANT), constant);
+    }
+
+    fn call(self: *Parser, can_assign: bool) ParsingError!void {
+        _ = can_assign;
+
+        const arg_count = try self.argument_list();
+        try self.emit_bytes(@intFromEnum(OpCode.OP_CALL), @intCast(arg_count));
+    }
+
+    fn argument_list(self: *Parser) ParsingError!usize {
+        var arg_count: usize = 0;
+
+        if (!self.check(TokenType.RIGHT_PAREN)) {
+            while (true) {
+                try self.expression();
+                if (arg_count == 16) {
+                    self.error_msg("Can't have more than 16 arguments.");
+                }
+                arg_count += 1;
+
+                if (!self.match(TokenType.COMMA)) {
+                    break;
+                }
+            }
+        }
+
+        self.consume(TokenType.RIGHT_PAREN, "Expect ')' after arguments.");
+
+        return arg_count;
+    }
+
+    fn return_statement(self: *Parser) ParsingError!void {
+        if (self.compiler.function_type == FunctionType.Script) {
+            self.error_msg("Can't return from top-level code.");
+        }
+
+        if (self.match(TokenType.SEMICOLON)) {
+            try self.emit_return();
+        } else {
+            try self.expression();
+            self.consume(TokenType.SEMICOLON, "Expect ';' after return value.");
+            try self.emit_byte(@intFromEnum(OpCode.OP_RETURN));
+        }
+    }
 };
 
 const FunctionType = enum {
@@ -709,6 +810,8 @@ const FunctionType = enum {
 };
 
 const Compiler = struct {
+    enclosing: ?*Compiler,
+
     function: *Obj.Function,
     function_type: FunctionType,
 
@@ -716,7 +819,7 @@ const Compiler = struct {
     local_count: usize,
     scope_depth: usize,
 
-    fn new(allocator: std.mem.Allocator, function_type: FunctionType) Compiler {
+    fn new(allocator: std.mem.Allocator, enclosing: ?*Compiler, function_type: FunctionType) Compiler {
         const obj_function = Obj.Function.new(allocator);
 
         var compiler = Compiler{
@@ -725,6 +828,7 @@ const Compiler = struct {
             .scope_depth = 0,
             .function = obj_function,
             .function_type = function_type,
+            .enclosing = enclosing,
         };
 
         compiler.locals[0].depth = 0;
@@ -739,6 +843,11 @@ const Compiler = struct {
 
         return compiler;
     }
+
+    fn destroy(self: *Compiler) void {
+        // do not destroy function here! it is used after compiler life.
+        _ = self;
+    }
 };
 
 const Local = struct {
@@ -747,8 +856,7 @@ const Local = struct {
 };
 
 pub fn compile(vm: *VM, contents: []const u8) !?*Obj.Function {
-    var compiler = Compiler.new(vm.allocator, FunctionType.Script);
-
+    var compiler = Compiler.new(vm.allocator, null, FunctionType.Script);
     var scanner = Scanner.init(contents);
     var parser = Parser.new(vm, &compiler, &scanner);
 
