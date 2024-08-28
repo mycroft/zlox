@@ -62,6 +62,10 @@ const Parser = struct {
         };
     }
 
+    inline fn current_chunk(self: *Parser) *Chunk {
+        return self.chunk;
+    }
+
     fn advance(self: *Parser) void {
         self.previous = self.current;
 
@@ -117,7 +121,7 @@ const Parser = struct {
     }
 
     fn emit_byte(self: *Parser, byte: u8) ParsingError!void {
-        self.chunk.write(byte, self.previous.?.line) catch |err| {
+        self.current_chunk().write(byte, self.previous.?.line) catch |err| {
             switch (err) {
                 error.OutOfMemory => return ParsingError.OutOfMemory,
             }
@@ -135,7 +139,7 @@ const Parser = struct {
 
     fn end_parser(self: *Parser) !void {
         if (!self.had_error and self.vm.has_tracing()) {
-            self.chunk.dissassemble("code");
+            self.current_chunk().dissassemble("code");
         }
         try self.emit_return();
     }
@@ -162,7 +166,7 @@ const Parser = struct {
     }
 
     fn make_constant(self: *Parser, value: Value) !u8 {
-        const constant = try self.chunk.add_constant(value);
+        const constant = try self.current_chunk().add_constant(value);
         if (constant > constants.UINT8_MAX) {
             self.error_msg("Too many constants in one chunk.");
             return 0;
@@ -585,11 +589,11 @@ const Parser = struct {
         try self.emit_byte(0xff);
         try self.emit_byte(0xff);
 
-        return self.chunk.count - 2;
+        return self.current_chunk().count - 2;
     }
 
     fn patch_jump(self: *Parser, offset: usize) void {
-        const jump = self.chunk.count - offset - 2;
+        const jump = self.current_chunk().count - offset - 2;
 
         if (jump > constants.UINT16_MAX) {
             self.error_msg("Too much code to jump over.");
@@ -598,8 +602,8 @@ const Parser = struct {
         const b1 = (jump >> 8) & 0xff;
         const b0 = jump & 0xff;
 
-        self.chunk.code[offset] = @intCast(b1);
-        self.chunk.code[offset + 1] = @intCast(b0);
+        self.current_chunk().code[offset] = @intCast(b1);
+        self.current_chunk().code[offset + 1] = @intCast(b0);
     }
 
     fn and_(self: *Parser, can_assign: bool) ParsingError!void {
@@ -624,7 +628,7 @@ const Parser = struct {
     }
 
     fn while_statement(self: *Parser) ParsingError!void {
-        const loop_start = self.chunk.count;
+        const loop_start = self.current_chunk().count;
         self.consume(TokenType.LEFT_PAREN, "Expect '(' after 'while'.");
         try self.expression();
         self.consume(TokenType.RIGHT_PAREN, "Expect ')' after condition.");
@@ -640,7 +644,7 @@ const Parser = struct {
     fn emit_loop(self: *Parser, loop_start: usize) ParsingError!void {
         try self.emit_byte(@intFromEnum(OpCode.OP_LOOP));
 
-        const offset = self.chunk.count - loop_start + 2;
+        const offset = self.current_chunk().count - loop_start + 2;
         if (offset > constants.UINT16_MAX) {
             self.error_msg("Loop body too large.");
         }
@@ -661,7 +665,7 @@ const Parser = struct {
             try self.expression_statement();
         }
 
-        var loop_start = self.chunk.count;
+        var loop_start = self.current_chunk().count;
 
         var exit_jump: ?usize = null;
 
@@ -676,7 +680,7 @@ const Parser = struct {
 
         if (!self.match(TokenType.RIGHT_PAREN)) {
             const body_jump = try self.emit_jump(@intFromEnum(OpCode.OP_JUMP));
-            const increment_start = self.chunk.count;
+            const increment_start = self.current_chunk().count;
             try self.expression();
             try self.emit_byte(@intFromEnum(OpCode.OP_POP));
             self.consume(TokenType.RIGHT_PAREN, "Expect ')' after for clauses.");

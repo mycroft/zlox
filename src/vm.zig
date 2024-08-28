@@ -61,6 +61,10 @@ pub const VM = struct {
         self.references.deinit();
     }
 
+    inline fn current_chunk(self: *VM) *Chunk {
+        return self.chunk.?;
+    }
+
     pub fn set_trace(self: *VM, tracing: bool) void {
         self.tracing = tracing;
     }
@@ -96,7 +100,7 @@ pub const VM = struct {
                     }
                     debug.print("\n", .{});
                 }
-                _ = self.chunk.?.dissassemble_instruction(self.ip.?);
+                _ = self.current_chunk().dissassemble_instruction(self.ip.?);
             }
 
             const instruction = self.read_byte();
@@ -209,7 +213,7 @@ pub const VM = struct {
     // XXX In the book, we're using a ptr to data directly, to avoid dereferencing to a given offset
     // How to do that in Zig?
     pub fn read_byte(self: *VM) u8 {
-        const ret = self.chunk.?.code[self.ip.?];
+        const ret = self.current_chunk().code[self.ip.?];
         self.ip.? += 1;
 
         return ret;
@@ -218,11 +222,11 @@ pub const VM = struct {
     pub fn read_short(self: *VM) u16 {
         self.ip.? += 2;
 
-        return (@as(u16, self.chunk.?.code[self.ip.? - 2]) << 8) | (@as(u16, self.chunk.?.code[self.ip.? - 1]));
+        return (@as(u16, self.current_chunk().code[self.ip.? - 2]) << 8) | (@as(u16, self.current_chunk().code[self.ip.? - 1]));
     }
 
     pub fn read_constant(self: *VM) Value {
-        return self.chunk.?.constants.values[read_byte(self)];
+        return self.current_chunk().constants.values[read_byte(self)];
     }
 
     pub fn push(self: *VM, value: Value) !void {
@@ -269,7 +273,7 @@ pub const VM = struct {
         const b = self.pop().as_cstring();
         const a = self.pop().as_cstring();
 
-        const concat_str = try std.mem.concat(self.chunk.?.allocator, u8, &.{ a, b });
+        const concat_str = try std.mem.concat(self.current_chunk().allocator, u8, &.{ a, b });
 
         var string_obj = self.take_string(concat_str);
 
@@ -284,7 +288,7 @@ pub const VM = struct {
 
     pub fn runtime_error(self: *VM, err_msg: []const u8) void {
         const instruction = self.ip.?;
-        const line = self.chunk.?.lines[instruction];
+        const line = self.current_chunk().lines[instruction];
 
         debug.print("err: {s}\n", .{err_msg});
         debug.print("[line {d}] in script\n", .{line});
