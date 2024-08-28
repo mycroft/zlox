@@ -746,8 +746,8 @@ const Local = struct {
     depth: ?usize,
 };
 
-pub fn compile(allocator: Allocator, vm: *VM, contents: []const u8) !?*Obj.Function {
-    var compiler = Compiler.new(allocator, FunctionType.Script);
+pub fn compile(vm: *VM, contents: []const u8) !?*Obj.Function {
+    var compiler = Compiler.new(vm.allocator, FunctionType.Script);
 
     var scanner = Scanner.init(contents);
     var parser = Parser.new(vm, &compiler, &scanner);

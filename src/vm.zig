@@ -53,13 +53,13 @@ pub const VM = struct {
         };
     }
 
-    pub fn free(self: *VM) void {
+    pub fn destroy(self: *VM) void {
         if (constants.DEBUG_PRINT_INTERNAL_STRINGS) {
             self.strings.dump();
         }
 
-        self.strings.deinit();
-        self.globals.deinit();
+        self.strings.destroy();
+        self.globals.destroy();
         self.clean_references();
         self.references.deinit();
     }
@@ -74,9 +74,9 @@ pub const VM = struct {
 
     pub fn interpret(self: *VM, allocator: Allocator, content: []const u8) !InterpretResult {
         var chunk = Chunk.new(allocator);
-        defer chunk.deinit();
+        defer chunk.destroy();
 
-        const function = try compile(allocator, self, content);
+        const function = try compile(self, content);
         if (function == null) {
             return InterpretResult.COMPILE_ERROR;
         }

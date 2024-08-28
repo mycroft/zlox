@@ -23,19 +23,18 @@ pub const Chunk = struct {
             .capacity = 0,
             .code = &.{},
             .lines = &.{},
-            .constants = ValueArray.new(),
+            .constants = ValueArray.new(allocator),
             .allocator = allocator,
         };
     }
 
-    pub fn init(self: *Chunk) !void {
-        self.deinit(self.allocator);
+    pub fn destroy(self: *Chunk) void {
+        self.constants.destroy();
 
-        self.count = 0;
-        self.capacity = 0;
-        self.code = &.{};
-        self.lines = &.{};
-        self.constants = ValueArray.new();
+        if (self.capacity > 0) {
+            self.allocator.free(self.code);
+            self.allocator.free(self.lines);
+        }
     }
 
     pub fn write(self: *Chunk, byte: u8, line: usize) !void {
@@ -109,17 +108,8 @@ pub const Chunk = struct {
         }
     }
 
-    pub fn deinit(self: *Chunk) void {
-        self.constants.free(self.allocator);
-
-        if (self.capacity > 0) {
-            self.allocator.free(self.code);
-            self.allocator.free(self.lines);
-        }
-    }
-
     pub fn add_constant(self: *Chunk, value: Value) !usize {
-        try self.constants.write(self.allocator, value);
+        try self.constants.write(value);
         return self.constants.count - 1;
     }
 };

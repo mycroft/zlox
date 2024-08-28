@@ -30,7 +30,7 @@ pub const Table = struct {
         };
     }
 
-    pub fn deinit(self: *Table) void {
+    pub fn destroy(self: *Table) void {
         if (self.capacity == 0) {
             return;
         }
@@ -202,7 +202,7 @@ test "initialize an hash table" {
     const allocator = std.testing.allocator;
 
     var table = Table.new(allocator);
-    defer table.deinit();
+    defer table.destroy();
     try std.testing.expectEqual(0, table.count);
     try std.testing.expectEqual(0, table.capacity);
 }
@@ -214,7 +214,7 @@ test "adding values" {
     defer key.destroy();
 
     var table = Table.new(allocator);
-    defer table.deinit();
+    defer table.destroy();
 
     var res = table.set(key, Value.nil_val());
     try std.testing.expectEqual(true, res);
@@ -234,7 +234,7 @@ test "adding tables" {
     defer key.destroy();
 
     var table = Table.new(allocator);
-    defer table.deinit();
+    defer table.destroy();
 
     const res = table.set(key, Value.nil_val());
     try std.testing.expectEqual(true, res);
@@ -242,7 +242,7 @@ test "adding tables" {
     try std.testing.expectEqual(1, table.count);
 
     var table2 = Table.new(allocator);
-    defer table2.deinit();
+    defer table2.destroy();
 
     try std.testing.expectEqual(0, table2.capacity);
     try std.testing.expectEqual(0, table2.count);
@@ -259,7 +259,7 @@ test "deleting from table" {
     defer key.destroy();
 
     var table = Table.new(allocator);
-    defer table.deinit();
+    defer table.destroy();
 
     var res = table.set(key, Value.nil_val());
     try std.testing.expectEqual(true, res);
@@ -279,7 +279,7 @@ test "find" {
     defer key.destroy();
 
     var table = Table.new(allocator);
-    defer table.deinit();
+    defer table.destroy();
 
     const value = Value.number_val(42.0);
 

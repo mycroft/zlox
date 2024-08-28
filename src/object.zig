@@ -36,9 +36,8 @@ pub const Obj = struct {
         }
 
         pub fn destroy(self: *String) void {
-            const allocator = self.obj.allocator;
-            allocator.free(self.chars);
-            allocator.destroy(self);
+            self.obj.allocator.free(self.chars);
+            self.obj.allocator.destroy(self);
         }
     };
 
@@ -64,9 +63,8 @@ pub const Obj = struct {
         }
 
         pub fn destroy(self: *Function) void {
-            const allocator = self.obj.allocator;
-            self.chunk.deinit();
-            allocator.destroy(self);
+            self.chunk.destroy();
+            self.obj.allocator.destroy(self);
         }
     };
 

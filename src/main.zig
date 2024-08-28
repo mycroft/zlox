@@ -63,7 +63,7 @@ pub fn main() !void {
     defer std.process.argsFree(allocator, args);
 
     var vm = VM.new(allocator);
-    defer vm.free();
+    defer vm.destroy();
 
     if (args.len == 1) {
         try repl(allocator, &vm);
