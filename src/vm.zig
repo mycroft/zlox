@@ -27,7 +27,8 @@ pub const VM = struct {
     allocator: Allocator,
     chunk: ?*Chunk,
     ip: ?usize,
-    stack: std.ArrayList(Value),
+    stack: [constants.STACK_MAX]Value,
+    stack_top: usize,
     // Keeping creating objects in references to destroy objects on cleaning.
     // In the book, a linked list between objects is used to handle this.
     references: std.ArrayList(*Obj),
@@ -40,7 +41,8 @@ pub const VM = struct {
             .allocator = allocator,
             .chunk = null,
             .ip = null,
-            .stack = std.ArrayList(Value).init(allocator),
+            .stack = undefined,
+            .stack_top = 0,
             .references = std.ArrayList(*Obj).init(allocator),
             .strings = Table.new(allocator),
             .globals = Table.new(allocator),
@@ -49,8 +51,6 @@ pub const VM = struct {
     }
 
     pub fn free(self: *VM) void {
-        self.stack.deinit();
-
         if (self.has_tracing()) {
             self.strings.dump();
         }
@@ -87,11 +87,11 @@ pub const VM = struct {
     pub fn run(self: *VM) !InterpretResult {
         while (true) {
             if (self.has_tracing()) {
-                if (self.stack.items.len > 0) {
+                if (self.stack_top > 0) {
                     debug.print("{s:32}", .{""});
-                    for (self.stack.items) |item| {
+                    for (0..self.stack_top) |item_idx| {
                         debug.print("[ ", .{});
-                        print_value(item);
+                        print_value(self.stack[item_idx]);
                         debug.print(" ]", .{});
                     }
                     debug.print("\n", .{});
@@ -176,11 +176,11 @@ pub const VM = struct {
                 },
                 @intFromEnum(OpCode.OP_GET_LOCAL) => {
                     const slot = self.read_byte();
-                    try self.push(self.stack.items[slot]);
+                    try self.push(self.stack[slot]);
                 },
                 @intFromEnum(OpCode.OP_SET_LOCAL) => {
                     const slot = self.read_byte();
-                    self.stack.items[slot] = self.peek(0);
+                    self.stack[slot] = self.peek(0);
                 },
                 @intFromEnum(OpCode.OP_JUMP) => {
                     const offset = self.read_short();
@@ -226,11 +226,14 @@ pub const VM = struct {
     }
 
     pub fn push(self: *VM, value: Value) !void {
-        try self.stack.append(value);
+        self.stack[self.stack_top] = value;
+        self.stack_top += 1;
     }
 
     pub fn pop(self: *VM) Value {
-        return self.stack.pop();
+        const value = self.stack[self.stack_top - 1];
+        self.stack_top -= 1;
+        return value;
     }
 
     pub fn binary_op(self: *VM, op: OpCode) !InterpretResult {
@@ -276,7 +279,7 @@ pub const VM = struct {
     }
 
     pub fn peek(self: *VM, distance: usize) Value {
-        return self.stack.items[self.stack.items.len - 1 - distance];
+        return self.stack[self.stack_top - 1 - distance];
     }
 
     pub fn runtime_error(self: *VM, err_msg: []const u8) void {
