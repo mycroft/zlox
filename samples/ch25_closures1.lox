@@ -1,0 +1,13 @@
+// this program should print "outer"; without proper closure support, it shows "global".
+
+var x = "global";
+
+fun outer() {
+    var x = "outer";
+    fun inner() {
+        print x;
+    }
+    inner();
+}
+
+outer();

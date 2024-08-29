@@ -80,6 +80,7 @@ pub const Chunk = struct {
     }
 
     pub fn dissassemble_instruction(self: Chunk, offset: usize) usize {
+        var current_offset = offset;
         debug.print("{d:0>4} ", .{offset});
 
         if (offset > 0 and self.lines[offset] == self.lines[offset - 1]) {
@@ -116,6 +117,32 @@ pub const Chunk = struct {
             @intFromEnum(OpCode.OP_JUMP_IF_FALSE) => return utils.jump_instruction("OP_JUMP_IF_FALSE", 1, self, offset),
             @intFromEnum(OpCode.OP_LOOP) => return utils.jump_instruction("OP_LOOP", -1, self, offset),
             @intFromEnum(OpCode.OP_CALL) => return utils.byte_instruction("OP_CALL", self, offset),
+            @intFromEnum(OpCode.OP_CLOSURE) => {
+                current_offset += 1;
+                const constant = self.code[current_offset];
+                current_offset += 1;
+                debug.print("{s:<16} {d:0>4} ", .{ "OP_CLOSURE", constant });
+                self.constants.values[constant].print();
+                debug.print("\n", .{});
+
+                const function = self.constants.values[constant].as_obj().as_function();
+                for (0..function.upvalue_count) |j| {
+                    _ = j;
+                    const is_local_str = switch (self.code[current_offset]) {
+                        1 => "local",
+                        else => "upvalue",
+                    };
+                    current_offset += 1;
+                    const index = self.code[current_offset];
+                    current_offset += 1;
+
+                    debug.print("{d:0>4}      | {s:<19} {s} {d}\n", .{ current_offset - 2, "", is_local_str, index });
+                }
+                return current_offset;
+            },
+            @intFromEnum(OpCode.OP_GET_UPVALUE) => return utils.byte_instruction("OP_GET_UPVALUE", self, offset),
+            @intFromEnum(OpCode.OP_SET_UPVALUE) => return utils.byte_instruction("OP_SET_UPVALUE", self, offset),
+            @intFromEnum(OpCode.OP_CLOSE_UPVALUE) => return utils.simple_instruction("OP_CLOSE_UPVALUE", offset),
             else => {
                 debug.print("unknown opcode {d}\n", .{instruction});
                 return offset + 1;

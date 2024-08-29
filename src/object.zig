@@ -12,6 +12,8 @@ pub const ObjType = enum {
     String,
     Function,
     Native,
+    Closure,
+    Upvalue,
 };
 
 pub const NativeFn = *const fn (vm: *VM, arg_count: usize, args: []Value) Value;
@@ -49,6 +51,7 @@ pub const Obj = struct {
     pub const Function = struct {
         obj: Obj,
         arity: usize,
+        upvalue_count: usize,
         chunk: *Chunk,
         name: ?*Obj.String,
 
@@ -61,6 +64,7 @@ pub const Obj = struct {
             const function_obj = allocator.create(Function) catch unreachable;
             function_obj.obj = obj;
             function_obj.arity = 0;
+            function_obj.upvalue_count = 0;
             function_obj.chunk = Chunk.new(allocator);
             function_obj.name = null;
 
@@ -95,6 +99,64 @@ pub const Obj = struct {
         }
     };
 
+    pub const Closure = struct {
+        obj: Obj,
+        function: *Obj.Function,
+        upvalues: []?*Obj.Upvalue,
+        upvalue_count: usize,
+
+        pub fn new(allocator: std.mem.Allocator, function: *Obj.Function) *Closure {
+            const obj = Obj{
+                .kind = ObjType.Closure,
+                .allocator = allocator,
+            };
+
+            const closure_obj = allocator.create(Closure) catch unreachable;
+            closure_obj.obj = obj;
+            closure_obj.function = function;
+            closure_obj.upvalue_count = function.upvalue_count;
+
+            closure_obj.upvalues = allocator.alloc(?*Obj.Upvalue, function.upvalue_count) catch unreachable;
+
+            for (0..function.upvalue_count) |i| {
+                closure_obj.upvalues[i] = null;
+            }
+
+            return closure_obj;
+        }
+
+        pub fn destroy(self: *Closure) void {
+            self.obj.allocator.free(self.upvalues);
+            self.obj.allocator.destroy(self);
+        }
+    };
+
+    pub const Upvalue = struct {
+        obj: Obj,
+        location: *Value,
+        next: ?*Obj.Upvalue,
+        closed: Value,
+
+        pub fn new(allocator: std.mem.Allocator, slot: *Value) *Upvalue {
+            const obj = Obj{
+                .kind = ObjType.Upvalue,
+                .allocator = allocator,
+            };
+
+            const upvalue_obj = allocator.create(Upvalue) catch unreachable;
+            upvalue_obj.obj = obj;
+            upvalue_obj.location = slot;
+            upvalue_obj.next = null;
+            upvalue_obj.closed = Value.nil_val();
+
+            return upvalue_obj;
+        }
+
+        pub fn destroy(self: *Upvalue) void {
+            self.obj.allocator.destroy(self);
+        }
+    };
+
     pub fn is_type(self: *Obj, kind: ObjType) bool {
         return self.kind == kind;
     }
@@ -109,6 +171,14 @@ pub const Obj = struct {
 
     pub fn is_native(self: *Obj) bool {
         return self.is_type(ObjType.Native);
+    }
+
+    pub fn is_closure(self: *Obj) bool {
+        return self.is_type(ObjType.Closure);
+    }
+
+    pub fn is_upvalue(self: *Obj) bool {
+        return self.is_type(ObjType.Upvalue);
     }
 
     pub fn print(self: *Obj) void {
@@ -126,8 +196,14 @@ pub const Obj = struct {
                 }
             },
             ObjType.Native => {
-                // const obj = self.as_native();
                 debug.print("<native fn>", .{});
+            },
+            ObjType.Closure => {
+                const obj = self.as_closure();
+                obj.function.obj.print();
+            },
+            ObjType.Upvalue => {
+                debug.print("upvalue", .{});
             },
         }
     }
@@ -146,6 +222,14 @@ pub const Obj = struct {
                 const obj: *Native = @fieldParentPtr("obj", self);
                 obj.destroy();
             },
+            ObjType.Closure => {
+                const obj: *Closure = @fieldParentPtr("obj", self);
+                obj.destroy();
+            },
+            ObjType.Upvalue => {
+                const obj: *Upvalue = @fieldParentPtr("obj", self);
+                obj.destroy();
+            },
         }
     }
 
@@ -161,6 +245,11 @@ pub const Obj = struct {
 
     pub fn as_native(self: *Obj) *Native {
         std.debug.assert(self.kind == ObjType.Native);
+        return @fieldParentPtr("obj", self);
+    }
+
+    pub fn as_closure(self: *Obj) *Closure {
+        std.debug.assert(self.kind == ObjType.Closure);
         return @fieldParentPtr("obj", self);
     }
 };
