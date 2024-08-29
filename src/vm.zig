@@ -9,6 +9,7 @@ const OpCode = @import("./opcode.zig").OpCode;
 const Value = @import("./values.zig").Value;
 const Obj = @import("./object.zig").Obj;
 const ObjType = @import("./object.zig").ObjType;
+const NativeFn = @import("./object.zig").NativeFn;
 const Table = @import("./table.zig").Table;
 
 const compile = @import("./compile.zig").compile;
@@ -52,6 +53,10 @@ pub const VM = struct {
             .frames = undefined,
             .frame_count = 0,
         };
+    }
+
+    pub fn init_vm(self: *VM) void {
+        self.define_native("clock", clock_native);
     }
 
     pub fn destroy(self: *VM) void {
@@ -378,6 +383,16 @@ pub const VM = struct {
                 ObjType.Function => {
                     return self.call(callee.as_obj().as_function(), arg_count);
                 },
+                ObjType.Native => {
+                    const native_obj: *Obj.Native = callee.as_obj().as_native();
+                    const value = native_obj.native(
+                        arg_count,
+                        self.stack[self.current_frame().slots_idx - arg_count .. self.current_frame().slots_idx],
+                    );
+                    self.stack_top -= arg_count + 1;
+                    _ = try self.push(value);
+                    return true;
+                },
                 else => {},
             }
         }
@@ -405,5 +420,22 @@ pub const VM = struct {
         frame.slots_idx = self.stack_top - arg_count - 1;
 
         return true;
+    }
+
+    pub fn define_native(self: *VM, name: []const u8, native_fn: NativeFn) void {
+        _ = try self.push(Value.obj_val(&self.copy_string(name).obj));
+        _ = try self.push(Value.obj_val(&Obj.Native.new(self.allocator, native_fn).obj));
+
+        _ = self.globals.set(self.stack[0].as_string(), self.stack[1]);
+
+        _ = self.pop();
+        _ = self.pop();
+    }
+
+    pub fn clock_native(arg_count: usize, args: []Value) Value {
+        const ts = std.time.milliTimestamp();
+        _ = arg_count;
+        _ = args;
+        return Value.number_val(@floatFromInt(ts));
     }
 };

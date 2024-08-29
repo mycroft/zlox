@@ -33,9 +33,11 @@ const Precedence = enum {
     Primary,
 };
 
+const ParserFn = *const fn (*Parser, bool) ParsingError!void;
+
 const ParserRule = struct {
-    prefix: ?*const fn (*Parser, bool) ParsingError!void,
-    infix: ?*const fn (*Parser, bool) ParsingError!void,
+    prefix: ?ParserFn,
+    infix: ?ParserFn,
     precedence: Precedence,
 };
 

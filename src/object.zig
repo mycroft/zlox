@@ -3,13 +3,17 @@ const debug = std.debug;
 const Allocator = std.mem.Allocator;
 
 const Chunk = @import("./chunk.zig").Chunk;
+const Value = @import("./values.zig").Value;
 
 const compute_hash = @import("./utils.zig").compute_hash;
 
 pub const ObjType = enum {
     String,
     Function,
+    Native,
 };
+
+pub const NativeFn = *const fn (arg_count: usize, args: []Value) Value;
 
 pub const Obj = struct {
     kind: ObjType,
@@ -68,6 +72,28 @@ pub const Obj = struct {
         }
     };
 
+    pub const Native = struct {
+        obj: Obj,
+        native: NativeFn,
+
+        pub fn new(allocator: std.mem.Allocator, native: NativeFn) *Native {
+            const obj = Obj{
+                .kind = ObjType.Native,
+                .allocator = allocator,
+            };
+
+            const native_obj = allocator.create(Native) catch unreachable;
+            native_obj.obj = obj;
+            native_obj.native = native;
+
+            return native_obj;
+        }
+
+        pub fn destroy(self: *Native) void {
+            self.obj.allocator.destroy(self);
+        }
+    };
+
     pub fn is_type(self: *Obj, kind: ObjType) bool {
         return self.kind == kind;
     }
@@ -77,7 +103,11 @@ pub const Obj = struct {
     }
 
     pub fn is_function(self: *Obj) bool {
-        return self.is_function(ObjType.Function);
+        return self.is_type(ObjType.Function);
+    }
+
+    pub fn is_native(self: *Obj) bool {
+        return self.is_type(ObjType.Native);
     }
 
     pub fn print(self: *Obj) void {
@@ -94,6 +124,10 @@ pub const Obj = struct {
                     debug.print("<fn {s}>", .{obj.name.?.chars});
                 }
             },
+            ObjType.Native => {
+                // const obj = self.as_native();
+                debug.print("<native fn>", .{});
+            },
         }
     }
 
@@ -107,6 +141,10 @@ pub const Obj = struct {
                 const obj: *Function = @fieldParentPtr("obj", self);
                 obj.destroy();
             },
+            ObjType.Native => {
+                const obj: *Native = @fieldParentPtr("obj", self);
+                obj.destroy();
+            },
         }
     }
 
@@ -117,6 +155,11 @@ pub const Obj = struct {
 
     pub fn as_function(self: *Obj) *Function {
         std.debug.assert(self.kind == ObjType.Function);
+        return @fieldParentPtr("obj", self);
+    }
+
+    pub fn as_native(self: *Obj) *Native {
+        std.debug.assert(self.kind == ObjType.Native);
         return @fieldParentPtr("obj", self);
     }
 };

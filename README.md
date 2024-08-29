@@ -14,7 +14,7 @@ While reading [Crafting Interpreters](https://craftinginterpreters.com/), after 
 - [x] 21 - Global Variables
 - [x] 22 - Local Variables
 - [x] 23 - Jumping Back and Forth
-- [ ] 24 - Calls and Functions
+- [x] 24 - Calls and Functions
 - [ ] 25 - Closures
 - [ ] 26 - Garbage Collection
 - [ ] 27 - Classes and Instances
