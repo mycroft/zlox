@@ -20,21 +20,40 @@ pub const NativeFn = *const fn (vm: *VM, arg_count: usize, args: []Value) Value;
 
 pub const Obj = struct {
     kind: ObjType,
-    allocator: std.mem.Allocator,
+    allocator: Allocator,
+    next: ?*Obj,
+
+    fn new(comptime T: type, vm: *VM, kind: ObjType) *T {
+        const created_obj = vm.allocator.create(T) catch unreachable;
+
+        created_obj.obj = Obj{
+            .kind = kind,
+            .allocator = vm.allocator,
+            .next = vm.objects,
+        };
+
+        vm.objects = &created_obj.obj;
+
+        return created_obj;
+    }
+
+    pub fn destroy(self: *Obj) void {
+        switch (self.kind) {
+            ObjType.String => self.as_string().destroy(),
+            ObjType.Function => self.as_function().destroy(),
+            ObjType.Native => self.as_native().destroy(),
+            ObjType.Closure => self.as_closure().destroy(),
+            ObjType.Upvalue => self.as_upvalue().destroy(),
+        }
+    }
 
     pub const String = struct {
         obj: Obj,
         chars: []const u8,
         hash: u32,
 
-        pub fn new(allocator: std.mem.Allocator, chars: []const u8) *String {
-            const obj = Obj{
-                .kind = ObjType.String,
-                .allocator = allocator,
-            };
-
-            const str_obj = allocator.create(String) catch unreachable;
-            str_obj.obj = obj;
+        pub fn new(vm: *VM, chars: []const u8) *String {
+            const str_obj = Obj.new(String, vm, ObjType.String);
 
             str_obj.chars = chars;
             str_obj.hash = compute_hash(str_obj.chars);
@@ -55,17 +74,12 @@ pub const Obj = struct {
         chunk: *Chunk,
         name: ?*Obj.String,
 
-        pub fn new(allocator: std.mem.Allocator) *Function {
-            const obj = Obj{
-                .kind = ObjType.Function,
-                .allocator = allocator,
-            };
+        pub fn new(vm: *VM) *Function {
+            const function_obj = Obj.new(Function, vm, ObjType.Function);
 
-            const function_obj = allocator.create(Function) catch unreachable;
-            function_obj.obj = obj;
             function_obj.arity = 0;
             function_obj.upvalue_count = 0;
-            function_obj.chunk = Chunk.new(allocator);
+            function_obj.chunk = Chunk.new(vm.allocator);
             function_obj.name = null;
 
             return function_obj;
@@ -81,14 +95,9 @@ pub const Obj = struct {
         obj: Obj,
         native: NativeFn,
 
-        pub fn new(allocator: std.mem.Allocator, native: NativeFn) *Native {
-            const obj = Obj{
-                .kind = ObjType.Native,
-                .allocator = allocator,
-            };
+        pub fn new(vm: *VM, native: NativeFn) *Native {
+            const native_obj = Obj.new(Native, vm, ObjType.Native);
 
-            const native_obj = allocator.create(Native) catch unreachable;
-            native_obj.obj = obj;
             native_obj.native = native;
 
             return native_obj;
@@ -105,18 +114,13 @@ pub const Obj = struct {
         upvalues: []?*Obj.Upvalue,
         upvalue_count: usize,
 
-        pub fn new(allocator: std.mem.Allocator, function: *Obj.Function) *Closure {
-            const obj = Obj{
-                .kind = ObjType.Closure,
-                .allocator = allocator,
-            };
+        pub fn new(vm: *VM, function: *Obj.Function) *Closure {
+            const closure_obj = Obj.new(Closure, vm, ObjType.Closure);
 
-            const closure_obj = allocator.create(Closure) catch unreachable;
-            closure_obj.obj = obj;
             closure_obj.function = function;
             closure_obj.upvalue_count = function.upvalue_count;
 
-            closure_obj.upvalues = allocator.alloc(?*Obj.Upvalue, function.upvalue_count) catch unreachable;
+            closure_obj.upvalues = vm.allocator.alloc(?*Obj.Upvalue, function.upvalue_count) catch unreachable;
 
             for (0..function.upvalue_count) |i| {
                 closure_obj.upvalues[i] = null;
@@ -137,14 +141,9 @@ pub const Obj = struct {
         next: ?*Obj.Upvalue,
         closed: Value,
 
-        pub fn new(allocator: std.mem.Allocator, slot: *Value) *Upvalue {
-            const obj = Obj{
-                .kind = ObjType.Upvalue,
-                .allocator = allocator,
-            };
+        pub fn new(vm: *VM, slot: *Value) *Upvalue {
+            const upvalue_obj = Obj.new(Upvalue, vm, ObjType.Upvalue);
 
-            const upvalue_obj = allocator.create(Upvalue) catch unreachable;
-            upvalue_obj.obj = obj;
             upvalue_obj.location = slot;
             upvalue_obj.next = null;
             upvalue_obj.closed = Value.nil_val();
@@ -208,31 +207,6 @@ pub const Obj = struct {
         }
     }
 
-    pub fn destroy(self: *Obj) void {
-        switch (self.kind) {
-            ObjType.String => {
-                const obj: *String = @fieldParentPtr("obj", self);
-                obj.destroy();
-            },
-            ObjType.Function => {
-                const obj: *Function = @fieldParentPtr("obj", self);
-                obj.destroy();
-            },
-            ObjType.Native => {
-                const obj: *Native = @fieldParentPtr("obj", self);
-                obj.destroy();
-            },
-            ObjType.Closure => {
-                const obj: *Closure = @fieldParentPtr("obj", self);
-                obj.destroy();
-            },
-            ObjType.Upvalue => {
-                const obj: *Upvalue = @fieldParentPtr("obj", self);
-                obj.destroy();
-            },
-        }
-    }
-
     pub fn as_string(self: *Obj) *String {
         std.debug.assert(self.kind == ObjType.String);
         return @fieldParentPtr("obj", self);
@@ -250,6 +224,11 @@ pub const Obj = struct {
 
     pub fn as_closure(self: *Obj) *Closure {
         std.debug.assert(self.kind == ObjType.Closure);
+        return @fieldParentPtr("obj", self);
+    }
+
+    pub fn as_upvalue(self: *Obj) *Upvalue {
+        std.debug.assert(self.kind == ObjType.Upvalue);
         return @fieldParentPtr("obj", self);
     }
 };

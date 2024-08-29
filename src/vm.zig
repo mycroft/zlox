@@ -36,26 +36,24 @@ pub const VM = struct {
     allocator: Allocator,
     stack: [constants.STACK_MAX]Value,
     stack_top: usize,
-    // Keeping creating objects in references to destroy objects on cleaning.
-    // In the book, a linked list between objects is used to handle this.
-    references: std.ArrayList(*Obj),
     strings: Table,
     globals: Table,
     frames: [constants.FRAMES_MAX]CallFrame,
     frame_count: usize,
     open_upvalues: ?*Obj.Upvalue,
+    objects: ?*Obj,
 
     pub fn new(allocator: Allocator) VM {
         return VM{
             .allocator = allocator,
             .stack = undefined,
             .stack_top = 0,
-            .references = std.ArrayList(*Obj).init(allocator),
             .strings = Table.new(allocator),
             .globals = Table.new(allocator),
             .frames = undefined,
             .frame_count = 0,
             .open_upvalues = null,
+            .objects = null,
         };
     }
 
@@ -72,8 +70,16 @@ pub const VM = struct {
 
         self.strings.destroy();
         self.globals.destroy();
-        self.clean_references();
-        self.references.deinit();
+        self.destroy_objects();
+    }
+
+    pub fn destroy_objects(self: *VM) void {
+        var obj = self.objects;
+        while (obj != null) {
+            const obj_next = obj.?.next;
+            obj.?.destroy();
+            obj = obj_next;
+        }
     }
 
     inline fn current_chunk(self: *VM) *Chunk {
@@ -89,10 +95,9 @@ pub const VM = struct {
         if (function == null) {
             return InterpretResult.COMPILE_ERROR;
         }
-        defer function.?.destroy();
 
         _ = try self.push(Value.obj_val(&function.?.obj));
-        const closure: *Obj.Closure = Obj.Closure.new(self.allocator, function.?);
+        const closure: *Obj.Closure = Obj.Closure.new(self, function.?);
         _ = self.pop();
         _ = try self.push(Value.obj_val(&closure.obj));
         _ = self.call(closure, 0);
@@ -229,7 +234,7 @@ pub const VM = struct {
                 },
                 @intFromEnum(OpCode.OP_CLOSURE) => {
                     const function = self.read_constant().as_obj().as_function();
-                    const closure = Obj.Closure.new(self.allocator, function);
+                    const closure = Obj.Closure.new(self, function);
                     _ = try self.push(Value.obj_val(&closure.obj));
                     for (0..closure.upvalue_count) |i| {
                         const is_local = self.read_byte();
@@ -329,9 +334,7 @@ pub const VM = struct {
 
         const concat_str = try std.mem.concat(self.current_chunk().allocator, u8, &.{ a, b });
 
-        var string_obj = self.take_string(concat_str);
-
-        self.add_reference(&string_obj.obj);
+        const string_obj = self.take_string(concat_str);
 
         try self.push(Value.obj_val(&string_obj.obj));
     }
@@ -365,23 +368,6 @@ pub const VM = struct {
         }
     }
 
-    pub fn add_reference(self: *VM, obj: *Obj) void {
-        // do not add duplicate references
-        for (self.references.items) |item| {
-            if (item == obj) {
-                return;
-            }
-        }
-        // XXX TODO catch unreachable to prevents
-        self.references.append(obj) catch unreachable;
-    }
-
-    pub fn clean_references(self: *VM) void {
-        for (self.references.items) |item| {
-            item.destroy();
-        }
-    }
-
     pub fn copy_string(self: *VM, source: []const u8) *Obj.String {
         const hash = compute_hash(source);
         const obj_string = self.strings.find_string(source, hash);
@@ -408,7 +394,7 @@ pub const VM = struct {
     }
 
     pub fn allocate_string(self: *VM, source: []const u8) *Obj.String {
-        const obj_string = Obj.String.new(self.allocator, source);
+        const obj_string = Obj.String.new(self, source);
         _ = self.strings.set(obj_string, Value.nil_val());
 
         return obj_string;
@@ -465,7 +451,7 @@ pub const VM = struct {
 
     pub fn define_native(self: *VM, name: []const u8, native_fn: NativeFn) void {
         _ = try self.push(Value.obj_val(&self.copy_string(name).obj));
-        _ = try self.push(Value.obj_val(&Obj.Native.new(self.allocator, native_fn).obj));
+        _ = try self.push(Value.obj_val(&Obj.Native.new(self, native_fn).obj));
 
         _ = self.globals.set(self.stack[0].as_string(), self.stack[1]);
 
@@ -486,7 +472,7 @@ pub const VM = struct {
             return upvalue.?;
         }
 
-        const created_upvalue = Obj.Upvalue.new(self.allocator, local);
+        const created_upvalue = Obj.Upvalue.new(self, local);
         created_upvalue.next = upvalue;
 
         if (prev_upvalue == null) {

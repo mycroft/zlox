@@ -55,7 +55,7 @@ pub fn run_file(allocator: Allocator, vm: *VM, filepath: []const u8) !void {
 }
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{ .safety = false }){};
+    var gpa = std.heap.GeneralPurposeAllocator(.{ .safety = true }){};
     defer _ = debug.assert(gpa.deinit() == .ok);
     const allocator = gpa.allocator();
 

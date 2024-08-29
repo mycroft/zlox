@@ -326,9 +326,7 @@ const Parser = struct {
 
         const str = self.previous.?.start[1 .. self.previous.?.length - 1];
 
-        var string_obj = self.vm.copy_string(str);
-
-        self.vm.add_reference(&string_obj.obj);
+        const string_obj = self.vm.copy_string(str);
 
         try self.emit_constant(Value.obj_val(&string_obj.obj));
     }
@@ -472,7 +470,6 @@ const Parser = struct {
 
     fn identifier_constant(self: *Parser, token: Token) ParsingError!u8 {
         const copy = &self.vm.copy_string(token.start[0..token.length]).obj;
-        self.vm.add_reference(copy);
         return self.make_constant(Value.obj_val(copy));
     }
 
@@ -774,7 +771,7 @@ const Parser = struct {
     }
 
     fn function(self: *Parser, function_type: FunctionType) ParsingError!void {
-        var compiler = Compiler.new(self.vm.allocator, self.compiler, function_type);
+        var compiler = Compiler.new(self.vm, self.compiler, function_type);
 
         self.compiler = &compiler;
         if (function_type != FunctionType.Script) {
@@ -879,8 +876,8 @@ const Compiler = struct {
     upvalues: [constants.UINT8_COUNT]Upvalue,
     scope_depth: usize,
 
-    fn new(allocator: std.mem.Allocator, enclosing: ?*Compiler, function_type: FunctionType) Compiler {
-        const obj_function = Obj.Function.new(allocator);
+    fn new(vm: *VM, enclosing: ?*Compiler, function_type: FunctionType) Compiler {
+        const obj_function = Obj.Function.new(vm);
 
         var compiler = Compiler{
             .locals = undefined,
@@ -924,7 +921,7 @@ const Upvalue = struct {
 };
 
 pub fn compile(vm: *VM, contents: []const u8) !?*Obj.Function {
-    var compiler = Compiler.new(vm.allocator, null, FunctionType.Script);
+    var compiler = Compiler.new(vm, null, FunctionType.Script);
     var scanner = Scanner.init(contents);
     var parser = Parser.new(vm, &compiler, &scanner);
 
