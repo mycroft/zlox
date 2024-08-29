@@ -12,6 +12,8 @@ const ObjType = @import("./object.zig").ObjType;
 const NativeFn = @import("./object.zig").NativeFn;
 const Table = @import("./table.zig").Table;
 
+const natives = @import("./native.zig");
+
 const compile = @import("./compile.zig").compile;
 const compute_hash = @import("./utils.zig").compute_hash;
 
@@ -56,7 +58,9 @@ pub const VM = struct {
     }
 
     pub fn init_vm(self: *VM) void {
-        self.define_native("clock", clock_native);
+        self.define_native("clock", natives.clock);
+        self.define_native("power", natives.power);
+        self.define_native("str2num", natives.str2num);
     }
 
     pub fn destroy(self: *VM) void {
@@ -386,8 +390,9 @@ pub const VM = struct {
                 ObjType.Native => {
                     const native_obj: *Obj.Native = callee.as_obj().as_native();
                     const value = native_obj.native(
+                        self,
                         arg_count,
-                        self.stack[self.current_frame().slots_idx - arg_count .. self.current_frame().slots_idx],
+                        self.stack[self.stack_top - arg_count .. self.stack_top],
                     );
                     self.stack_top -= arg_count + 1;
                     _ = try self.push(value);
@@ -430,12 +435,5 @@ pub const VM = struct {
 
         _ = self.pop();
         _ = self.pop();
-    }
-
-    pub fn clock_native(arg_count: usize, args: []Value) Value {
-        const ts = std.time.milliTimestamp();
-        _ = arg_count;
-        _ = args;
-        return Value.number_val(@floatFromInt(ts));
     }
 };

@@ -4,6 +4,7 @@ const Allocator = std.mem.Allocator;
 
 const Chunk = @import("./chunk.zig").Chunk;
 const Value = @import("./values.zig").Value;
+const VM = @import("./vm.zig").VM;
 
 const compute_hash = @import("./utils.zig").compute_hash;
 
@@ -13,7 +14,7 @@ pub const ObjType = enum {
     Native,
 };
 
-pub const NativeFn = *const fn (arg_count: usize, args: []Value) Value;
+pub const NativeFn = *const fn (vm: *VM, arg_count: usize, args: []Value) Value;
 
 pub const Obj = struct {
     kind: ObjType,
