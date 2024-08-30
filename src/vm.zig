@@ -4,11 +4,14 @@ const Allocator = std.mem.Allocator;
 
 const constants = @import("./constant.zig");
 
+const ZloxAllocator = @import("./memory.zig").ZloxAllocator;
+
 const Chunk = @import("./chunk.zig").Chunk;
 const OpCode = @import("./opcode.zig").OpCode;
 const Value = @import("./values.zig").Value;
 const Obj = @import("./object.zig").Obj;
 const ObjType = @import("./object.zig").ObjType;
+const Parser = @import("./compile.zig").Parser;
 const NativeFn = @import("./object.zig").NativeFn;
 const Table = @import("./table.zig").Table;
 
@@ -42,25 +45,40 @@ pub const VM = struct {
     frame_count: usize,
     open_upvalues: ?*Obj.Upvalue,
     objects: ?*Obj,
+    parser: ?*Parser,
+    gray_count: usize,
+    gray_capacity: usize,
+    gray_stack: ?[]*Obj,
 
-    pub fn new(allocator: Allocator) VM {
-        return VM{
-            .allocator = allocator,
+    pub fn new() VM {
+        const vm = VM{
+            .allocator = undefined,
             .stack = undefined,
             .stack_top = 0,
-            .strings = Table.new(allocator),
-            .globals = Table.new(allocator),
+            .strings = undefined,
+            .globals = undefined,
             .frames = undefined,
             .frame_count = 0,
             .open_upvalues = null,
             .objects = null,
+            .parser = null,
+            .gray_capacity = 0,
+            .gray_count = 0,
+            .gray_stack = &.{},
         };
+
+        return vm;
     }
 
-    pub fn init_vm(self: *VM) void {
+    pub fn init_vm(self: *VM, allocator: Allocator) void {
+        self.allocator = allocator;
+        self.globals = Table.new(self.allocator);
+        self.strings = Table.new(self.allocator);
+
         self.define_native("clock", natives.clock);
         self.define_native("power", natives.power);
         self.define_native("str2num", natives.str2num);
+        self.define_native("num2str", natives.num2str);
     }
 
     pub fn destroy(self: *VM) void {
@@ -71,6 +89,10 @@ pub const VM = struct {
         self.strings.destroy();
         self.globals.destroy();
         self.destroy_objects();
+
+        if (self.gray_stack != null) {
+            self.allocator.free(self.gray_stack.?);
+        }
     }
 
     pub fn destroy_objects(self: *VM) void {
@@ -78,6 +100,15 @@ pub const VM = struct {
         while (obj != null) {
             const obj_next = obj.?.next;
             obj.?.destroy();
+            obj = obj_next;
+        }
+    }
+
+    pub fn dump_objects(self: *VM) void {
+        var obj = self.objects;
+        while (obj != null) {
+            const obj_next = obj.?.next;
+            std.debug.print("OBJ: {*}\n", .{obj.?});
             obj = obj_next;
         }
     }
@@ -329,12 +360,14 @@ pub const VM = struct {
     }
 
     pub fn concatenate(self: *VM) !void {
-        const b = self.pop().as_cstring();
-        const a = self.pop().as_cstring();
+        const b = self.peek(0).as_cstring();
+        const a = self.peek(1).as_cstring();
 
         const concat_str = try std.mem.concat(self.current_chunk().allocator, u8, &.{ a, b });
-
         const string_obj = self.take_string(concat_str);
+
+        _ = self.pop();
+        _ = self.pop();
 
         try self.push(Value.obj_val(&string_obj.obj));
     }
@@ -395,7 +428,10 @@ pub const VM = struct {
 
     pub fn allocate_string(self: *VM, source: []const u8) *Obj.String {
         const obj_string = Obj.String.new(self, source);
+
+        _ = try self.push(Value.obj_val(&obj_string.obj));
         _ = self.strings.set(obj_string, Value.nil_val());
+        _ = self.pop();
 
         return obj_string;
     }

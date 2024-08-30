@@ -58,7 +58,7 @@ pub fn num2str(vm: *VM, arg_count: usize, args: []Value) Value {
         return Value.nil_val();
     };
 
-    const result = Obj.String.new(vm.allocator, str);
+    const result = Obj.String.new(vm, str);
 
-    return Value.obj_val(result);
+    return Value.obj_val(&result.obj);
 }

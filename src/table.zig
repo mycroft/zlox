@@ -6,13 +6,13 @@ const constants = @import("./constant.zig");
 
 const Obj = @import("./object.zig").Obj;
 const Value = @import("./values.zig").Value;
+const ZloxAllocator = @import("./memory.zig").ZloxAllocator;
 
-const grow_capacity = @import("./utils.zig").grow_capacity;
 const compute_hash = @import("./utils.zig").compute_hash;
 
-const Entry = struct {
-    key: ?*Obj.String,
-    value: Value,
+pub const Entry = struct {
+    key: ?*Obj.String = null,
+    value: Value = Value.nil_val(),
 };
 
 pub const Table = struct {
@@ -43,7 +43,7 @@ pub const Table = struct {
         const current_capacity: f32 = @floatFromInt(self.capacity);
 
         if (current_count > current_capacity * constants.TABLE_MAX_LOAD) {
-            const capacity = grow_capacity(self.capacity);
+            const capacity = ZloxAllocator.grow_capacity(self.capacity);
             self.adjust_capacity(capacity);
         }
 
@@ -90,11 +90,10 @@ pub const Table = struct {
     }
 
     pub fn adjust_capacity(self: *Table, capacity: usize) void {
-        var entries = self.allocator.alloc(Entry, capacity) catch unreachable;
+        const entries = self.allocator.alloc(Entry, capacity) catch unreachable;
 
-        for (0..entries.len) |idx| {
-            entries[idx].key = null;
-            entries[idx].value = Value.nil_val();
+        for (entries) |*e| {
+            e.* = Entry{};
         }
 
         self.count = 0;

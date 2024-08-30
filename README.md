@@ -16,7 +16,7 @@ While reading [Crafting Interpreters](https://craftinginterpreters.com/), after 
 - [x] 23 - Jumping Back and Forth
 - [x] 24 - Calls and Functions
 - [x] 25 - Closures
-- [ ] 26 - Garbage Collection
+- [x] 26 - Garbage Collection
 - [ ] 27 - Classes and Instances
 - [ ] 28 - Method and Initializers
 - [ ] 29 - Superclasses

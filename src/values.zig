@@ -4,7 +4,7 @@ const debug = std.debug;
 const Allocator = std.mem.Allocator;
 
 const Obj = @import("./object.zig").Obj;
-const utils = @import("./utils.zig");
+const ZloxAllocator = @import("./memory.zig").ZloxAllocator;
 
 pub const ValueType = enum {
     Bool,
@@ -158,7 +158,7 @@ pub const ValueArray = struct {
     pub fn write(self: *ValueArray, value: Value) !void {
         if (self.capacity < self.count + 1) {
             const old_capacity = self.capacity;
-            self.capacity = utils.grow_capacity(old_capacity);
+            self.capacity = ZloxAllocator.grow_capacity(old_capacity);
             self.values = try self.allocator.realloc(self.values, self.capacity);
         }
 

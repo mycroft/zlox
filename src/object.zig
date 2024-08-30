@@ -22,6 +22,7 @@ pub const Obj = struct {
     kind: ObjType,
     allocator: Allocator,
     next: ?*Obj,
+    is_marked: bool,
 
     fn new(comptime T: type, vm: *VM, kind: ObjType) *T {
         const created_obj = vm.allocator.create(T) catch unreachable;
@@ -30,6 +31,7 @@ pub const Obj = struct {
             .kind = kind,
             .allocator = vm.allocator,
             .next = vm.objects,
+            .is_marked = false,
         };
 
         vm.objects = &created_obj.obj;
@@ -79,7 +81,7 @@ pub const Obj = struct {
 
             function_obj.arity = 0;
             function_obj.upvalue_count = 0;
-            function_obj.chunk = Chunk.new(vm.allocator);
+            function_obj.chunk = Chunk.new(vm.allocator, vm);
             function_obj.name = null;
 
             return function_obj;

@@ -41,7 +41,7 @@ const ParserRule = struct {
     precedence: Precedence,
 };
 
-const Parser = struct {
+pub const Parser = struct {
     compiler: *Compiler,
     current: ?Token,
     previous: ?Token,
@@ -865,7 +865,7 @@ const FunctionType = enum {
     Script,
 };
 
-const Compiler = struct {
+pub const Compiler = struct {
     enclosing: ?*Compiler,
 
     function: *Obj.Function,
@@ -925,6 +925,8 @@ pub fn compile(vm: *VM, contents: []const u8) !?*Obj.Function {
     var scanner = Scanner.init(contents);
     var parser = Parser.new(vm, &compiler, &scanner);
 
+    vm.parser = &parser;
+
     parser.advance();
 
     while (!parser.match(TokenType.EOF)) {
@@ -933,6 +935,7 @@ pub fn compile(vm: *VM, contents: []const u8) !?*Obj.Function {
 
     const function = try parser.end_parser();
 
+    vm.parser = null;
     if (!parser.had_error) {
         return function;
     } else {

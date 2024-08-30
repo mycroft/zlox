@@ -1,0 +1,21 @@
+fun do_stuff(v) {
+    var s = v + v;
+    print s;
+}
+
+fun blah() {
+    var c = "ha" + "ha";
+
+    for(var i = 0; i < 100; i = i + 1) {
+        var d = "ha" + num2str(i);
+        do_stuff(d);
+    }
+
+    return "hiii";
+}
+
+var a = blah();
+
+a = "updated";
+// GC here.
+print a;

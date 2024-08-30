@@ -9,6 +9,8 @@ const OpCode = @import("./opcode.zig").OpCode;
 const VM = @import("./vm.zig").VM;
 const InterpretResult = @import("./vm.zig").InterpretResult;
 
+const ZloxAllocator = @import("./memory.zig").ZloxAllocator;
+
 // XXX imported to run tests.
 const Table = @import("./table.zig");
 
@@ -62,8 +64,15 @@ pub fn main() !void {
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
 
-    var vm = VM.new(allocator);
-    vm.init_vm();
+    var vm = VM.new();
+    if (constants.USE_CUSTON_ALLOCATOR) {
+        var zlox_allocator_generator = ZloxAllocator.init(allocator, &vm);
+        const z_allocator = zlox_allocator_generator.allocator();
+        vm.init_vm(z_allocator);
+    } else {
+        vm.init_vm(allocator);
+    }
+
     defer vm.destroy();
 
     if (args.len == 1) {

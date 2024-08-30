@@ -5,12 +5,15 @@ const Allocator = std.mem.Allocator;
 const Value = @import("./values.zig").Value;
 const ValueArray = @import("./values.zig").ValueArray;
 const OpCode = @import("./opcode.zig").OpCode;
+const VM = @import("./vm.zig").VM;
+const ZloxAllocator = @import("./memory.zig").ZloxAllocator;
 
-const grow_capacity = @import("./utils.zig").grow_capacity;
+const constants = @import("./constant.zig");
 const utils = @import("./utils.zig");
 
 pub const Chunk = struct {
     allocator: Allocator,
+    vm: *VM,
 
     count: usize,
     capacity: usize,
@@ -18,10 +21,11 @@ pub const Chunk = struct {
     lines: []usize,
     constants: ValueArray,
 
-    pub fn new(allocator: Allocator) *Chunk {
+    pub fn new(allocator: Allocator, vm: *VM) *Chunk {
         var chunk: *Chunk = allocator.create(Chunk) catch unreachable;
 
         chunk.allocator = allocator;
+        chunk.vm = vm;
         chunk.count = 0;
         chunk.capacity = 0;
         chunk.code = &.{};
@@ -45,7 +49,8 @@ pub const Chunk = struct {
     pub fn write(self: *Chunk, byte: u8, line: usize) !void {
         if (self.capacity < self.count + 1) {
             const old_capacity = self.capacity;
-            self.capacity = grow_capacity(old_capacity);
+            self.capacity = ZloxAllocator.grow_capacity(old_capacity);
+
             self.code = try self.allocator.realloc(self.code, self.capacity);
             self.lines = try self.allocator.realloc(self.lines, self.capacity);
         }
@@ -151,7 +156,10 @@ pub const Chunk = struct {
     }
 
     pub fn add_constant(self: *Chunk, value: Value) !usize {
+        _ = try self.vm.push(value);
         try self.constants.write(value);
+        _ = self.vm.pop();
+
         return self.constants.count - 1;
     }
 };
