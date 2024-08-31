@@ -35,6 +35,10 @@ const Precedence = enum {
 
 const ParserFn = *const fn (*Parser, bool) ParsingError!void;
 
+const ClassCompiler = struct {
+    enclosing: ?*ClassCompiler,
+};
+
 const ParserRule = struct {
     prefix: ?ParserFn,
     infix: ?ParserFn,
@@ -49,6 +53,7 @@ pub const Parser = struct {
     had_error: bool,
     panic_mode: bool,
     vm: *VM,
+    class_compiler: ?*ClassCompiler,
 
     fn new(vm: *VM, compiler: *Compiler, scanner: *Scanner) Parser {
         return Parser{
@@ -59,11 +64,16 @@ pub const Parser = struct {
             .had_error = false,
             .panic_mode = false,
             .vm = vm,
+            .class_compiler = null,
         };
     }
 
     inline fn current_chunk(self: *Parser) *Chunk {
         return self.compiler.function.chunk;
+    }
+
+    inline fn current_class_compiler(self: *Parser) ?*ClassCompiler {
+        return self.class_compiler;
     }
 
     fn advance(self: *Parser) void {
@@ -278,7 +288,7 @@ pub const Parser = struct {
             TokenType.PRINT => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.RETURN => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.SUPER => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
-            TokenType.THIS => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+            TokenType.THIS => ParserRule{ .prefix = this_, .infix = null, .precedence = Precedence.None },
             TokenType.TRUE => ParserRule{ .prefix = literal, .infix = null, .precedence = Precedence.None },
             TokenType.VAR => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.WHILE => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
@@ -871,6 +881,11 @@ pub const Parser = struct {
         try self.emit_bytes(@intFromEnum(OpCode.OP_CLASS), name_constant);
         try self.define_variable(name_constant);
 
+        var class_compiler = ClassCompiler{
+            .enclosing = self.current_class_compiler(),
+        };
+        self.class_compiler = &class_compiler;
+
         try self.named_variable(class_name, false);
 
         self.consume(TokenType.LEFT_BRACE, "Expect '{' before class body.");
@@ -879,6 +894,8 @@ pub const Parser = struct {
         }
         self.consume(TokenType.RIGHT_BRACE, "Expect '}' after class body.");
         try self.emit_byte(@intFromEnum(OpCode.OP_POP));
+
+        self.class_compiler = self.current_class_compiler().?.enclosing;
     }
 
     fn dot(self: *Parser, can_assign: bool) ParsingError!void {
@@ -897,14 +914,25 @@ pub const Parser = struct {
         self.consume(TokenType.IDENTIFIER, "Expect method name.");
         const constant = try self.identifier_constant(self.previous.?);
 
-        try self.function(FunctionType.Function);
+        try self.function(FunctionType.Method);
         try self.emit_bytes(@intFromEnum(OpCode.OP_METHOD), constant);
+    }
+
+    fn this_(self: *Parser, can_assign: bool) ParsingError!void {
+        if (self.current_class_compiler() == null) {
+            self.error_msg("Can't use 'this' outside of a class.");
+            return;
+        }
+
+        _ = can_assign;
+        try self.variable(false);
     }
 };
 
 const FunctionType = enum {
     Function,
     Script,
+    Method,
 };
 
 pub const Compiler = struct {
@@ -931,6 +959,8 @@ pub const Compiler = struct {
             .enclosing = enclosing,
         };
 
+        compiler.local_count += 1;
+
         compiler.locals[0].depth = 0;
         compiler.locals[0].name = Token{
             .token_type = TokenType.EOF,
@@ -940,7 +970,10 @@ pub const Compiler = struct {
         };
         compiler.locals[0].is_captured = false;
 
-        compiler.local_count += 1;
+        if (function_type != FunctionType.Function) {
+            compiler.locals[0].name.start = "this";
+            compiler.locals[0].name.length = 4;
+        }
 
         return compiler;
     }

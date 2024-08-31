@@ -504,7 +504,7 @@ pub const VM = struct {
                 },
                 ObjType.BoundMethod => {
                     const bound_method = callee.as_obj().as_bound_method();
-
+                    self.stack[self.stack_top - arg_count - 1] = bound_method.receiver;
                     return self.call(bound_method.method, arg_count);
                 },
                 else => {},
