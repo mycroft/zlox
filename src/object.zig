@@ -3,6 +3,7 @@ const debug = std.debug;
 const Allocator = std.mem.Allocator;
 
 const Chunk = @import("./chunk.zig").Chunk;
+const Table = @import("./table.zig").Table;
 const Value = @import("./values.zig").Value;
 const VM = @import("./vm.zig").VM;
 
@@ -14,6 +15,8 @@ pub const ObjType = enum {
     Native,
     Closure,
     Upvalue,
+    Class,
+    Instance,
 };
 
 pub const NativeFn = *const fn (vm: *VM, arg_count: usize, args: []Value) Value;
@@ -46,6 +49,8 @@ pub const Obj = struct {
             ObjType.Native => self.as_native().destroy(),
             ObjType.Closure => self.as_closure().destroy(),
             ObjType.Upvalue => self.as_upvalue().destroy(),
+            ObjType.Class => self.as_class().destroy(),
+            ObjType.Instance => self.as_instance().destroy(),
         }
     }
 
@@ -158,6 +163,43 @@ pub const Obj = struct {
         }
     };
 
+    pub const Class = struct {
+        obj: Obj,
+        name: *Obj.String,
+
+        pub fn new(vm: *VM, name: *Obj.String) *Class {
+            const class_obj = Obj.new(Class, vm, ObjType.Class);
+
+            class_obj.name = name;
+
+            return class_obj;
+        }
+
+        pub fn destroy(self: *Class) void {
+            self.obj.allocator.destroy(self);
+        }
+    };
+
+    pub const Instance = struct {
+        obj: Obj,
+        class: *Obj.Class,
+        fields: Table,
+
+        pub fn new(vm: *VM, class: *Obj.Class) *Instance {
+            const instance_obj = Obj.new(Instance, vm, ObjType.Instance);
+
+            instance_obj.class = class;
+            instance_obj.fields = Table.new(vm.allocator);
+
+            return instance_obj;
+        }
+
+        pub fn destroy(self: *Instance) void {
+            self.fields.destroy();
+            self.obj.allocator.destroy(self);
+        }
+    };
+
     pub fn is_type(self: *Obj, kind: ObjType) bool {
         return self.kind == kind;
     }
@@ -180,6 +222,14 @@ pub const Obj = struct {
 
     pub fn is_upvalue(self: *Obj) bool {
         return self.is_type(ObjType.Upvalue);
+    }
+
+    pub fn is_class(self: *Obj) bool {
+        return self.is_type(ObjType.Class);
+    }
+
+    pub fn is_instance(self: *Obj) bool {
+        return self.is_type(ObjType.Instance);
     }
 
     pub fn print(self: *Obj) void {
@@ -206,6 +256,14 @@ pub const Obj = struct {
             ObjType.Upvalue => {
                 debug.print("upvalue", .{});
             },
+            ObjType.Class => {
+                const obj = self.as_class();
+                debug.print("{s}", .{obj.name.chars});
+            },
+            ObjType.Instance => {
+                const obj = self.as_instance();
+                debug.print("{s} instance", .{obj.class.name.chars});
+            },
         }
     }
 
@@ -231,6 +289,16 @@ pub const Obj = struct {
 
     pub fn as_upvalue(self: *Obj) *Upvalue {
         std.debug.assert(self.kind == ObjType.Upvalue);
+        return @fieldParentPtr("obj", self);
+    }
+
+    pub fn as_class(self: *Obj) *Class {
+        std.debug.assert(self.kind == ObjType.Class);
+        return @fieldParentPtr("obj", self);
+    }
+
+    pub fn as_instance(self: *Obj) *Instance {
+        std.debug.assert(self.kind == ObjType.Instance);
         return @fieldParentPtr("obj", self);
     }
 };

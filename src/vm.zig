@@ -290,6 +290,42 @@ pub const VM = struct {
                     self.close_upvalues(&self.stack[self.stack_top - 1]);
                     _ = self.pop();
                 },
+                @intFromEnum(OpCode.OP_CLASS) => {
+                    const name: *Obj.String = self.read_constant().as_string();
+                    _ = try self.push(Value.obj_val(&Obj.Class.new(self, name).obj));
+                },
+                @intFromEnum(OpCode.OP_GET_PROPERTY) => {
+                    if (!self.peek(0).is_obj() or !self.peek(0).as_obj().is_instance()) {
+                        self.runtime_error("Only instances have properties.");
+                        return InterpretResult.RUNTIME_ERROR;
+                    }
+
+                    const instance = self.peek(0).as_obj().as_instance();
+                    const name = self.read_constant().as_string();
+
+                    var value = Value.nil_val();
+
+                    if (instance.fields.get(name, &value)) {
+                        _ = self.pop();
+                        _ = try self.push(value);
+                        continue;
+                    }
+
+                    self.runtime_error("Undefined property"); // XXX to complete with name.chars
+                    return InterpretResult.RUNTIME_ERROR;
+                },
+                @intFromEnum(OpCode.OP_SET_PROPERTY) => {
+                    if (!self.peek(1).is_obj() or !self.peek(1).as_obj().is_instance()) {
+                        self.runtime_error("Only instances have fields.");
+                        return InterpretResult.RUNTIME_ERROR;
+                    }
+                    const instance = self.peek(1).as_obj().as_instance();
+                    _ = instance.fields.set(self.read_constant().as_string(), self.peek(0));
+
+                    const value = self.pop();
+                    _ = self.pop();
+                    _ = try self.push(value);
+                },
                 else => {
                     debug.print("Invalid instruction: {d}\n", .{instruction});
                     return InterpretResult.RUNTIME_ERROR;
@@ -455,6 +491,12 @@ pub const VM = struct {
                 },
                 ObjType.Closure => {
                     return self.call(callee.as_obj().as_closure(), arg_count);
+                },
+                ObjType.Class => {
+                    const class = callee.as_obj().as_class();
+                    self.stack[self.stack_top - arg_count - 1] = Value.obj_val(&Obj.Instance.new(self, class).obj);
+
+                    return true;
                 },
                 else => {},
             }

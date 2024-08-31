@@ -1,0 +1,16 @@
+class Brioche {}
+print Brioche();
+
+class Toast {}
+var toast = Toast();
+print toast;
+print toast.jam = "grape";
+print toast.jam;
+
+class Pair {}
+var pair = Pair();
+
+pair.first = 1;
+pair.second = 2;
+
+print pair.first + pair.second;

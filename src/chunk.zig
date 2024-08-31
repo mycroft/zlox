@@ -148,6 +148,9 @@ pub const Chunk = struct {
             @intFromEnum(OpCode.OP_GET_UPVALUE) => return utils.byte_instruction("OP_GET_UPVALUE", self, offset),
             @intFromEnum(OpCode.OP_SET_UPVALUE) => return utils.byte_instruction("OP_SET_UPVALUE", self, offset),
             @intFromEnum(OpCode.OP_CLOSE_UPVALUE) => return utils.simple_instruction("OP_CLOSE_UPVALUE", offset),
+            @intFromEnum(OpCode.OP_CLASS) => return utils.constant_instruction("OP_CLASS", self, offset),
+            @intFromEnum(OpCode.OP_GET_PROPERTY) => return utils.constant_instruction("OP_GET_PROPERTY", self, offset),
+            @intFromEnum(OpCode.OP_SET_PROPERTY) => return utils.constant_instruction("OP_SET_PROPERTY", self, offset),
             else => {
                 debug.print("unknown opcode {d}\n", .{instruction});
                 return offset + 1;

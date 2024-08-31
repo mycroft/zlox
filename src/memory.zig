@@ -234,6 +234,15 @@ pub const ZloxAllocator = struct {
                     }
                 }
             },
+            ObjType.Class => {
+                const class: *Obj.Class = obj.as_class();
+                self.mark_object(&class.name.obj);
+            },
+            ObjType.Instance => {
+                const instance: *Obj.Instance = obj.as_instance();
+                self.mark_object(&instance.class.obj);
+                self.mark_table(&instance.fields);
+            },
         }
     }
 

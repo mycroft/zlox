@@ -316,7 +316,7 @@ pub const Scanner = struct {
     pub fn identifier_type(self: *Scanner) TokenType {
         return switch (self.source[self.start]) {
             'a' => self.check_keyword(1, 2, "nd", TokenType.AND),
-            'c' => self.check_keyword(1, 4, "class", TokenType.CLASS),
+            'c' => self.check_keyword(1, 4, "lass", TokenType.CLASS),
             'e' => self.check_keyword(1, 3, "lse", TokenType.ELSE),
             'f' => if (self.current - self.start > 1) {
                 return switch (self.source[self.start + 1]) {

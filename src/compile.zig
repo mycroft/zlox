@@ -249,7 +249,7 @@ pub const Parser = struct {
             TokenType.LEFT_BRACE => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.RIGHT_BRACE => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.COMMA => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
-            TokenType.DOT => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+            TokenType.DOT => ParserRule{ .prefix = null, .infix = dot, .precedence = Precedence.Call },
             TokenType.MINUS => ParserRule{ .prefix = unary, .infix = binary, .precedence = Precedence.Term },
             TokenType.PLUS => ParserRule{ .prefix = null, .infix = binary, .precedence = Precedence.Term },
             TokenType.SEMICOLON => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
@@ -363,7 +363,9 @@ pub const Parser = struct {
     }
 
     fn declaration(self: *Parser) ParsingError!void {
-        if (self.match(TokenType.FUN)) {
+        if (self.match(TokenType.CLASS)) {
+            try self.class_declaration();
+        } else if (self.match(TokenType.FUN)) {
             try self.fun_declaration();
         } else if (self.match(TokenType.VAR)) {
             try self.var_declaration();
@@ -856,6 +858,30 @@ pub const Parser = struct {
             try self.expression();
             self.consume(TokenType.SEMICOLON, "Expect ';' after return value.");
             try self.emit_byte(@intFromEnum(OpCode.OP_RETURN));
+        }
+    }
+
+    fn class_declaration(self: *Parser) ParsingError!void {
+        self.consume(TokenType.IDENTIFIER, "Expect class name.");
+        const name_constant = try self.identifier_constant(self.previous.?);
+        self.declare_variable();
+
+        try self.emit_bytes(@intFromEnum(OpCode.OP_CLASS), name_constant);
+        try self.define_variable(name_constant);
+
+        self.consume(TokenType.LEFT_BRACE, "Expect '{' before class body.");
+        self.consume(TokenType.RIGHT_BRACE, "Expect '}' after class body.");
+    }
+
+    fn dot(self: *Parser, can_assign: bool) ParsingError!void {
+        self.consume(TokenType.IDENTIFIER, "Expect property name after '.'.");
+        const name = try self.identifier_constant(self.previous.?);
+
+        if (can_assign and self.match(TokenType.EQUAL)) {
+            try self.expression();
+            try self.emit_bytes(@intFromEnum(OpCode.OP_SET_PROPERTY), name);
+        } else {
+            try self.emit_bytes(@intFromEnum(OpCode.OP_GET_PROPERTY), name);
         }
     }
 };
