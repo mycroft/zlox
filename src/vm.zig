@@ -311,8 +311,9 @@ pub const VM = struct {
                         continue;
                     }
 
-                    self.runtime_error("Undefined property"); // XXX to complete with name.chars
-                    return InterpretResult.RUNTIME_ERROR;
+                    if (!self.bind_method(instance.class, name)) {
+                        return InterpretResult.RUNTIME_ERROR;
+                    }
                 },
                 @intFromEnum(OpCode.OP_SET_PROPERTY) => {
                     if (!self.peek(1).is_obj() or !self.peek(1).as_obj().is_instance()) {
@@ -325,6 +326,9 @@ pub const VM = struct {
                     const value = self.pop();
                     _ = self.pop();
                     _ = try self.push(value);
+                },
+                @intFromEnum(OpCode.OP_METHOD) => {
+                    self.define_method(self.read_constant().as_string());
                 },
                 else => {
                     debug.print("Invalid instruction: {d}\n", .{instruction});
@@ -498,11 +502,31 @@ pub const VM = struct {
 
                     return true;
                 },
+                ObjType.BoundMethod => {
+                    const bound_method = callee.as_obj().as_bound_method();
+
+                    return self.call(bound_method.method, arg_count);
+                },
                 else => {},
             }
         }
         self.runtime_error("Can only call functions and classes.");
         return false;
+    }
+
+    pub fn bind_method(self: *VM, class: *Obj.Class, name: *Obj.String) bool {
+        var method: Value = Value.nil_val();
+
+        if (!class.methods.get(name, &method)) {
+            self.runtime_error("Undefined property."); // XXX add name.chars as '%s'.
+            return false;
+        }
+
+        const bound: *Obj.BoundMethod = Obj.BoundMethod.new(self, self.peek(0), method.as_obj().as_closure());
+        _ = self.pop();
+        try self.push(Value.obj_val(&bound.obj));
+
+        return true;
     }
 
     pub fn call(self: *VM, closure: *Obj.Closure, arg_count: usize) bool {
@@ -570,5 +594,13 @@ pub const VM = struct {
             upvalue.location = &upvalue.closed;
             self.open_upvalues = upvalue.next;
         }
+    }
+
+    fn define_method(self: *VM, name: *Obj.String) void {
+        const method = self.peek(0);
+        const class = self.peek(1).as_obj().as_class();
+
+        _ = class.methods.set(name, method);
+        _ = self.pop();
     }
 };

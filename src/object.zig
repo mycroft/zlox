@@ -17,6 +17,7 @@ pub const ObjType = enum {
     Upvalue,
     Class,
     Instance,
+    BoundMethod,
 };
 
 pub const NativeFn = *const fn (vm: *VM, arg_count: usize, args: []Value) Value;
@@ -51,6 +52,7 @@ pub const Obj = struct {
             ObjType.Upvalue => self.as_upvalue().destroy(),
             ObjType.Class => self.as_class().destroy(),
             ObjType.Instance => self.as_instance().destroy(),
+            ObjType.BoundMethod => self.as_bound_method().destroy(),
         }
     }
 
@@ -166,16 +168,19 @@ pub const Obj = struct {
     pub const Class = struct {
         obj: Obj,
         name: *Obj.String,
+        methods: Table,
 
         pub fn new(vm: *VM, name: *Obj.String) *Class {
             const class_obj = Obj.new(Class, vm, ObjType.Class);
 
             class_obj.name = name;
+            class_obj.methods = Table.new(vm.allocator);
 
             return class_obj;
         }
 
         pub fn destroy(self: *Class) void {
+            self.methods.destroy();
             self.obj.allocator.destroy(self);
         }
     };
@@ -196,6 +201,25 @@ pub const Obj = struct {
 
         pub fn destroy(self: *Instance) void {
             self.fields.destroy();
+            self.obj.allocator.destroy(self);
+        }
+    };
+
+    pub const BoundMethod = struct {
+        obj: Obj,
+        receiver: Value,
+        method: *Obj.Closure,
+
+        pub fn new(vm: *VM, receiver: Value, method: *Obj.Closure) *BoundMethod {
+            const bound_method = Obj.new(BoundMethod, vm, ObjType.BoundMethod);
+
+            bound_method.receiver = receiver;
+            bound_method.method = method;
+
+            return bound_method;
+        }
+
+        pub fn destroy(self: *BoundMethod) void {
             self.obj.allocator.destroy(self);
         }
     };
@@ -232,6 +256,10 @@ pub const Obj = struct {
         return self.is_type(ObjType.Instance);
     }
 
+    pub fn is_bound_method(self: *Obj) bool {
+        return self.is_type(ObjType.BoundMethod);
+    }
+
     pub fn print(self: *Obj) void {
         switch (self.kind) {
             ObjType.String => {
@@ -263,6 +291,10 @@ pub const Obj = struct {
             ObjType.Instance => {
                 const obj = self.as_instance();
                 debug.print("{s} instance", .{obj.class.name.chars});
+            },
+            ObjType.BoundMethod => {
+                const obj = self.as_bound_method();
+                obj.method.function.obj.print();
             },
         }
     }
@@ -299,6 +331,11 @@ pub const Obj = struct {
 
     pub fn as_instance(self: *Obj) *Instance {
         std.debug.assert(self.kind == ObjType.Instance);
+        return @fieldParentPtr("obj", self);
+    }
+
+    pub fn as_bound_method(self: *Obj) *BoundMethod {
+        std.debug.assert(self.kind == ObjType.BoundMethod);
         return @fieldParentPtr("obj", self);
     }
 };

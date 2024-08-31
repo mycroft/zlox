@@ -863,14 +863,22 @@ pub const Parser = struct {
 
     fn class_declaration(self: *Parser) ParsingError!void {
         self.consume(TokenType.IDENTIFIER, "Expect class name.");
+        const class_name = self.previous.?;
+
         const name_constant = try self.identifier_constant(self.previous.?);
         self.declare_variable();
 
         try self.emit_bytes(@intFromEnum(OpCode.OP_CLASS), name_constant);
         try self.define_variable(name_constant);
 
+        try self.named_variable(class_name, false);
+
         self.consume(TokenType.LEFT_BRACE, "Expect '{' before class body.");
+        while (!self.check(TokenType.RIGHT_BRACE) and !self.check(TokenType.EOF)) {
+            try self.method();
+        }
         self.consume(TokenType.RIGHT_BRACE, "Expect '}' after class body.");
+        try self.emit_byte(@intFromEnum(OpCode.OP_POP));
     }
 
     fn dot(self: *Parser, can_assign: bool) ParsingError!void {
@@ -883,6 +891,14 @@ pub const Parser = struct {
         } else {
             try self.emit_bytes(@intFromEnum(OpCode.OP_GET_PROPERTY), name);
         }
+    }
+
+    fn method(self: *Parser) ParsingError!void {
+        self.consume(TokenType.IDENTIFIER, "Expect method name.");
+        const constant = try self.identifier_constant(self.previous.?);
+
+        try self.function(FunctionType.Function);
+        try self.emit_bytes(@intFromEnum(OpCode.OP_METHOD), constant);
     }
 };
 

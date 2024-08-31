@@ -237,11 +237,17 @@ pub const ZloxAllocator = struct {
             ObjType.Class => {
                 const class: *Obj.Class = obj.as_class();
                 self.mark_object(&class.name.obj);
+                self.mark_table(&class.methods);
             },
             ObjType.Instance => {
                 const instance: *Obj.Instance = obj.as_instance();
                 self.mark_object(&instance.class.obj);
                 self.mark_table(&instance.fields);
+            },
+            ObjType.BoundMethod => {
+                const bound_method: *Obj.BoundMethod = obj.as_bound_method();
+                self.mark_value(&bound_method.receiver);
+                self.mark_object(&bound_method.method.obj);
             },
         }
     }
