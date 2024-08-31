@@ -338,6 +338,40 @@ pub const VM = struct {
                 @intFromEnum(OpCode.OP_METHOD) => {
                     self.define_method(self.read_constant().as_string());
                 },
+                @intFromEnum(OpCode.OP_INDEX_GET) => {
+                    if (!self.peek(0).is_number() or !self.peek(1).is_string()) {
+                        self.runtime_error("A number and a string are required for indexes.");
+                        return InterpretResult.RUNTIME_ERROR;
+                    }
+                    const index_val = self.pop();
+                    const value = self.pop();
+
+                    const index: usize = @as(usize, @intFromFloat(index_val.as_number()));
+                    if (index >= value.as_cstring().len) {
+                        self.runtime_error("The index must be set between 0 and string len.");
+                        return InterpretResult.RUNTIME_ERROR;
+                    }
+                    const c = value.as_cstring()[index .. index + 1];
+
+                    _ = try self.push(Value.obj_val(&self.copy_string(c).obj));
+                },
+                @intFromEnum(OpCode.OP_INDEX_SET) => {
+                    const value = self.pop();
+                    const index_val = self.pop();
+                    const origin = self.pop();
+
+                    if (!value.is_string() or value.as_cstring().len != 1) {
+                        self.runtime_error("Value to assign must be one byte.");
+                        return InterpretResult.RUNTIME_ERROR;
+                    }
+
+                    const index: usize = @as(usize, @intFromFloat(index_val.as_number()));
+
+                    var str = self.allocator.dupe(u8, origin.as_cstring()) catch unreachable;
+                    str[index] = value.as_cstring()[0];
+
+                    _ = try self.push(Value.obj_val(&self.take_string(str).obj));
+                },
                 else => {
                     debug.print("Invalid instruction: {d}\n", .{instruction});
                     return InterpretResult.RUNTIME_ERROR;

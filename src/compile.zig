@@ -29,6 +29,7 @@ const Precedence = enum {
     Term,
     Factor,
     Unary,
+    Index,
     Call,
     Primary,
 };
@@ -206,6 +207,18 @@ pub const Parser = struct {
         self.consume(TokenType.RIGHT_PAREN, "Expect ')' after expression.");
     }
 
+    fn index_(self: *Parser, can_assign: bool) ParsingError!void {
+        try self.expression();
+        self.consume(TokenType.RIGHT_BRACKET, "Expecting ']");
+
+        if (can_assign and self.match(TokenType.EQUAL)) {
+            try self.expression();
+            try self.emit_byte(@intFromEnum(OpCode.OP_INDEX_SET));
+        } else {
+            try self.emit_byte(@intFromEnum(OpCode.OP_INDEX_GET));
+        }
+    }
+
     fn unary(self: *Parser, can_assign: bool) ParsingError!void {
         _ = can_assign;
 
@@ -267,6 +280,8 @@ pub const Parser = struct {
             TokenType.DOT => ParserRule{ .prefix = null, .infix = dot, .precedence = Precedence.Call },
             TokenType.MINUS => ParserRule{ .prefix = unary, .infix = binary, .precedence = Precedence.Term },
             TokenType.PLUS => ParserRule{ .prefix = null, .infix = binary, .precedence = Precedence.Term },
+            TokenType.LEFT_BRACKET => ParserRule{ .prefix = null, .infix = index_, .precedence = Precedence.Unary },
+            TokenType.RIGHT_BRACKET => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.SEMICOLON => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.SLASH => ParserRule{ .prefix = null, .infix = binary, .precedence = Precedence.Factor },
             TokenType.STAR => ParserRule{ .prefix = null, .infix = binary, .precedence = Precedence.Factor },
@@ -367,6 +382,17 @@ pub const Parser = struct {
             arg = try self.identifier_constant(token);
             get_op = OpCode.OP_GET_GLOBAL;
             set_op = OpCode.OP_SET_GLOBAL;
+        }
+
+        // handle assignments by index:
+        // - push value to the stack
+        // - modify it (through a OP_INDEX_SET)
+        // - update the variable
+        if (can_assign and self.match(TokenType.LEFT_BRACKET)) {
+            try self.emit_bytes(@intFromEnum(get_op), @intCast(arg));
+            try self.index_(can_assign);
+            try self.emit_bytes(@intFromEnum(set_op), @intCast(arg));
+            return;
         }
 
         if (can_assign and self.match(TokenType.EQUAL)) {
