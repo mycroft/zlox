@@ -72,7 +72,6 @@ pub fn main() !void {
     } else {
         vm.init_vm(allocator);
     }
-
     defer vm.destroy();
 
     if (args.len == 1) {

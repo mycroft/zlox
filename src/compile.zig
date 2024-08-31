@@ -144,7 +144,12 @@ pub const Parser = struct {
     }
 
     fn emit_return(self: *Parser) ParsingError!void {
-        try self.emit_byte(@intFromEnum(OpCode.OP_NIL));
+        if (self.compiler.function_type == FunctionType.Initializer) {
+            try self.emit_bytes(@intFromEnum(OpCode.OP_GET_LOCAL), 0);
+        } else {
+            try self.emit_byte(@intFromEnum(OpCode.OP_NIL));
+        }
+
         try self.emit_byte(@intFromEnum(OpCode.OP_RETURN));
     }
 
@@ -865,6 +870,9 @@ pub const Parser = struct {
         if (self.match(TokenType.SEMICOLON)) {
             try self.emit_return();
         } else {
+            if (self.compiler.function_type == FunctionType.Initializer) {
+                self.error_msg("Can't return a value from an initialiaer");
+            }
             try self.expression();
             self.consume(TokenType.SEMICOLON, "Expect ';' after return value.");
             try self.emit_byte(@intFromEnum(OpCode.OP_RETURN));
@@ -914,7 +922,12 @@ pub const Parser = struct {
         self.consume(TokenType.IDENTIFIER, "Expect method name.");
         const constant = try self.identifier_constant(self.previous.?);
 
-        try self.function(FunctionType.Method);
+        var function_type: FunctionType = FunctionType.Method;
+        // std.debug.print("len: {d} {s}\n", .{self.previous.?.length, });
+        if (self.previous.?.length == 4 and std.mem.eql(u8, self.previous.?.start[0..4], "init")) {
+            function_type = FunctionType.Initializer;
+        }
+        try self.function(function_type);
         try self.emit_bytes(@intFromEnum(OpCode.OP_METHOD), constant);
     }
 
@@ -933,6 +946,7 @@ const FunctionType = enum {
     Function,
     Script,
     Method,
+    Initializer,
 };
 
 pub const Compiler = struct {

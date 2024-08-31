@@ -25,7 +25,7 @@ pub const ZloxAllocator = struct {
             .parent_allocator = parent_allocator,
             .vm = vm,
             .bytes_allocated = 0,
-            .next_gc = 1024,
+            .next_gc = 4096,
             .current_gc = false,
         };
     }
@@ -145,6 +145,8 @@ pub const ZloxAllocator = struct {
         self.mark_table(&self.vm.globals);
 
         self.mark_compiler_roots();
+
+        self.mark_object(&self.vm.init_string.?.obj);
     }
 
     pub fn mark_value(self: *Self, value: *Value) void {
@@ -264,6 +266,9 @@ pub const ZloxAllocator = struct {
         for (0..table.capacity) |idx| {
             const entry: *Entry = &table.entries[idx];
             if (entry.key != null and !entry.key.?.obj.is_marked) {
+                if (comptime constants.DEBUG_LOG_GC) {
+                    std.debug.print("GC: table_remove_white: deleting {s}\n", .{entry.key.?.chars});
+                }
                 _ = table.del(entry.key.?);
             }
         }
@@ -288,7 +293,7 @@ pub const ZloxAllocator = struct {
                     self.vm.objects = object;
                 }
 
-                if (comptime constants.DEBUG_LOG_GC == true) {
+                if (comptime constants.DEBUG_LOG_GC) {
                     std.debug.print("GC: sweeping {*}: ", .{unreached});
                     unreached.print();
                     std.debug.print("\n", .{});

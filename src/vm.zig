@@ -49,6 +49,7 @@ pub const VM = struct {
     gray_count: usize,
     gray_capacity: usize,
     gray_stack: ?[]*Obj,
+    init_string: ?*Obj.String,
 
     pub fn new() VM {
         const vm = VM{
@@ -65,6 +66,7 @@ pub const VM = struct {
             .gray_capacity = 0,
             .gray_count = 0,
             .gray_stack = &.{},
+            .init_string = null,
         };
 
         return vm;
@@ -74,6 +76,9 @@ pub const VM = struct {
         self.allocator = allocator;
         self.globals = Table.new(self.allocator);
         self.strings = Table.new(self.allocator);
+
+        _ = try self.push(Value.obj_val(&self.copy_string("init").obj));
+        self.init_string = self.pop().as_string();
 
         self.define_native("clock", natives.clock);
         self.define_native("power", natives.power);
@@ -88,6 +93,7 @@ pub const VM = struct {
 
         self.strings.destroy();
         self.globals.destroy();
+        self.init_string = null;
         self.destroy_objects();
 
         if (self.gray_stack != null) {
@@ -108,7 +114,9 @@ pub const VM = struct {
         var obj = self.objects;
         while (obj != null) {
             const obj_next = obj.?.next;
-            std.debug.print("OBJ: {*}\n", .{obj.?});
+            std.debug.print("OBJ: {*} {any}", .{ obj.?, obj.?.kind });
+            // obj.?.print();
+            std.debug.print("\n", .{});
             obj = obj_next;
         }
     }
@@ -500,6 +508,14 @@ pub const VM = struct {
                     const class = callee.as_obj().as_class();
                     self.stack[self.stack_top - arg_count - 1] = Value.obj_val(&Obj.Instance.new(self, class).obj);
 
+                    var initializer = Value.nil_val();
+
+                    if (class.methods.get(self.init_string.?, &initializer) == true) {
+                        return self.call(initializer.as_obj().as_closure(), arg_count);
+                    } else if (arg_count != 0) {
+                        self.runtime_error("Expected 0 arguments."); // XXX show number of arguments.
+                    }
+
                     return true;
                 },
                 ObjType.BoundMethod => {
@@ -518,7 +534,10 @@ pub const VM = struct {
         var method: Value = Value.nil_val();
 
         if (!class.methods.get(name, &method)) {
-            self.runtime_error("Undefined property."); // XXX add name.chars as '%s'.
+            const err_msg = std.fmt.allocPrint(self.allocator, "Undefined property '{s}'.", .{name.chars}) catch unreachable;
+            defer self.allocator.free(err_msg);
+            self.runtime_error(err_msg);
+
             return false;
         }
 
@@ -531,8 +550,11 @@ pub const VM = struct {
 
     pub fn call(self: *VM, closure: *Obj.Closure, arg_count: usize) bool {
         if (arg_count != closure.function.arity) {
-            self.runtime_error("Invalid argument count.");
-            // runtimeError("Expected %d arguments but got %d.", function->arity, argCount);
+            const err_msg = std.fmt.allocPrint(self.allocator, "Expected {d} arguments but got {d}.", .{ closure.function.arity, arg_count }) catch unreachable;
+            defer self.allocator.free(err_msg);
+
+            self.runtime_error(err_msg);
+
             return false;
         }
 

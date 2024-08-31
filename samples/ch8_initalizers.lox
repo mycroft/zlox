@@ -1,0 +1,17 @@
+class Brunch {
+    var food;
+    var drink;
+
+    init(food, drink) {
+        this.food = food;
+        this.drink = drink;
+    }
+
+    fun get_recipe() {
+        return this.food + " " + this.drink;
+    }
+}
+
+var instance = Brunch("eggs", "coffee");
+print instance;
+print instance.get_recipe();

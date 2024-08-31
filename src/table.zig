@@ -65,7 +65,6 @@ pub const Table = struct {
 
         while (true) {
             const entry = &entries[index];
-
             if (entry.key == null) {
                 if (entry.value.is_nil()) {
                     // Empty entry.
@@ -121,7 +120,7 @@ pub const Table = struct {
         std.debug.print("== Hash table count:{} capacity:{} ==\n", .{ self.count, self.capacity });
         for (self.entries, 0..) |entry, idx| {
             if (entry.key != null) {
-                std.debug.print("{d} ({d}) - {s}: ", .{ idx, entry.key.?.hash, entry.key.?.chars });
+                std.debug.print("{d} {*} (size: {d} hash:{d}) - {s}: ", .{ idx, entry.key, entry.key.?.chars.len, entry.key.?.hash, entry.key.?.chars });
                 entry.value.type_print();
                 std.debug.print("\n", .{});
             }

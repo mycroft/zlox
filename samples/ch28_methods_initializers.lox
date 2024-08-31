@@ -1,8 +1,4 @@
 class Brunch {
-    bacon() {}
-    eggs() {}
+    init(food, drink) {}
 }
-
-var brunch = Brunch();
-print brunch;
-brunch.bacon();
+Brunch("eggs", "coffee");
