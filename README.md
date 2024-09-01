@@ -20,7 +20,7 @@ While reading [Crafting Interpreters](https://craftinginterpreters.com/), after 
 - [x] 27 - Classes and Instances
 - [x] 28 - Method and Initializers
 - [x] 29 - Superclasses
-- [ ] 30 - Optimization
+- [x] 30 - Optimization (without NaN boxing/NaN tagging)
 
 ## Build & run
 
