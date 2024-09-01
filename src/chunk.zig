@@ -154,6 +154,7 @@ pub const Chunk = struct {
             @intFromEnum(OpCode.OP_METHOD) => return utils.constant_instruction("OP_METHOD", self, offset),
             @intFromEnum(OpCode.OP_INDEX_GET) => return utils.simple_instruction("OP_INDEX_GET", offset),
             @intFromEnum(OpCode.OP_INDEX_SET) => return utils.simple_instruction("OP_INDEX_SET", offset),
+            @intFromEnum(OpCode.OP_INVOKE) => return utils.invoke_instruction("OP_INVOKE", self, offset),
             else => {
                 debug.print("unknown opcode {d}\n", .{instruction});
                 return offset + 1;

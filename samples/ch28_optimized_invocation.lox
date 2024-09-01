@@ -1,0 +1,17 @@
+class Oops {
+    init() {
+        fun f() {
+            print "not a method";
+            return "returned value from f";
+        }
+        this.field = f;
+    }
+
+    blah() {
+        return "returned value from blah";
+    }
+}
+
+var oops = Oops();
+print oops.field();
+print oops.blah();

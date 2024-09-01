@@ -372,6 +372,13 @@ pub const VM = struct {
 
                     _ = try self.push(Value.obj_val(&self.take_string(str).obj));
                 },
+                @intFromEnum(OpCode.OP_INVOKE) => {
+                    const method = self.read_constant().as_string();
+                    const arg_count = self.read_byte();
+                    if (!self.invoke(method, arg_count)) {
+                        return InterpretResult.RUNTIME_ERROR;
+                    }
+                },
                 else => {
                     debug.print("Invalid instruction: {d}\n", .{instruction});
                     return InterpretResult.RUNTIME_ERROR;
@@ -586,9 +593,7 @@ pub const VM = struct {
         if (arg_count != closure.function.arity) {
             const err_msg = std.fmt.allocPrint(self.allocator, "Expected {d} arguments but got {d}.", .{ closure.function.arity, arg_count }) catch unreachable;
             defer self.allocator.free(err_msg);
-
             self.runtime_error(err_msg);
-
             return false;
         }
 
@@ -658,5 +663,31 @@ pub const VM = struct {
 
         _ = class.methods.set(name, method);
         _ = self.pop();
+    }
+
+    fn invoke(self: *VM, name: *Obj.String, arg_count: usize) bool {
+        const receiver = self.peek(arg_count);
+        const instance = receiver.as_obj().as_instance();
+
+        var value = Value.nil_val();
+        if (instance.fields.get(name, &value)) {
+            self.stack[self.stack_top - arg_count - 1] = value;
+
+            return self.call_value(value, arg_count);
+        }
+
+        return self.invoke_from_class(instance.class, name, arg_count);
+    }
+
+    fn invoke_from_class(self: *VM, class: *Obj.Class, name: *Obj.String, arg_count: usize) bool {
+        var method = Value.nil_val();
+        if (!class.methods.get(name, &method)) {
+            const err_msg = std.fmt.allocPrint(self.allocator, "Undefined property '{s}'.", .{name.chars}) catch unreachable;
+            defer self.allocator.free(err_msg);
+            self.runtime_error(err_msg);
+            return false;
+        }
+
+        return self.call(method.as_obj().as_closure(), arg_count);
     }
 };

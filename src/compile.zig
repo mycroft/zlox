@@ -939,6 +939,10 @@ pub const Parser = struct {
         if (can_assign and self.match(TokenType.EQUAL)) {
             try self.expression();
             try self.emit_bytes(@intFromEnum(OpCode.OP_SET_PROPERTY), name);
+        } else if (self.match(TokenType.LEFT_PAREN)) {
+            const arg_count = try self.argument_list();
+            try self.emit_bytes(@intFromEnum(OpCode.OP_INVOKE), name);
+            try self.emit_byte(@intCast(arg_count));
         } else {
             try self.emit_bytes(@intFromEnum(OpCode.OP_GET_PROPERTY), name);
         }

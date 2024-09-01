@@ -55,3 +55,14 @@ pub fn identifiers_equals(a: Token, b: Token) bool {
 
     return std.mem.eql(u8, a.start[0..a.length], b.start[0..b.length]);
 }
+
+pub fn invoke_instruction(opcode_name: []const u8, chunk: Chunk, offset: usize) usize {
+    const constant = chunk.code[offset + 1];
+    const arg_count = chunk.code[offset + 2];
+
+    std.debug.print("{s:<16} ({d} args) {d:4} '", .{ opcode_name, arg_count, constant });
+    chunk.constants.values[constant].print();
+    std.debug.print("'\n", .{});
+
+    return offset + 3;
+}
