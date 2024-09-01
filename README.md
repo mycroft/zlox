@@ -19,7 +19,7 @@ While reading [Crafting Interpreters](https://craftinginterpreters.com/), after 
 - [x] 26 - Garbage Collection
 - [x] 27 - Classes and Instances
 - [x] 28 - Method and Initializers
-- [ ] 29 - Superclasses
+- [x] 29 - Superclasses
 - [ ] 30 - Optimization
 
 ## Build & run
