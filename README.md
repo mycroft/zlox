@@ -18,7 +18,7 @@ While reading [Crafting Interpreters](https://craftinginterpreters.com/), after 
 - [x] 25 - Closures
 - [x] 26 - Garbage Collection
 - [x] 27 - Classes and Instances
-- [ ] 28 - Method and Initializers
+- [x] 28 - Method and Initializers
 - [ ] 29 - Superclasses
 - [ ] 30 - Optimization
 
