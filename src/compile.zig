@@ -38,6 +38,7 @@ const ParserFn = *const fn (*Parser, bool) ParsingError!void;
 
 const ClassCompiler = struct {
     enclosing: ?*ClassCompiler,
+    has_super_class: bool,
 };
 
 const ParserRule = struct {
@@ -307,7 +308,7 @@ pub const Parser = struct {
             TokenType.OR => ParserRule{ .prefix = null, .infix = or_, .precedence = Precedence.Or },
             TokenType.PRINT => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
             TokenType.RETURN => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
-            TokenType.SUPER => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+            TokenType.SUPER => ParserRule{ .prefix = super_, .infix = null, .precedence = Precedence.None },
             TokenType.THIS => ParserRule{ .prefix = this_, .infix = null, .precedence = Precedence.None },
             TokenType.TRUE => ParserRule{ .prefix = literal, .infix = null, .precedence = Precedence.None },
             TokenType.VAR => ParserRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
@@ -917,8 +918,27 @@ pub const Parser = struct {
 
         var class_compiler = ClassCompiler{
             .enclosing = self.current_class_compiler(),
+            .has_super_class = false,
         };
         self.class_compiler = &class_compiler;
+
+        if (self.match(TokenType.LESS)) {
+            self.consume(TokenType.IDENTIFIER, "Expect superclass name.");
+            try self.variable(false);
+
+            if (identifiers_equals(class_name, self.previous.?)) {
+                self.error_msg("A class can't inherit from itself.");
+            }
+
+            self.begin_scope();
+            self.add_local(self.synthetic_token("super"));
+            try self.define_variable(0);
+
+            try self.named_variable(class_name, false);
+            try self.emit_byte(@intFromEnum(OpCode.OP_INHERIT));
+
+            self.current_class_compiler().?.has_super_class = true;
+        }
 
         try self.named_variable(class_name, false);
 
@@ -929,7 +949,21 @@ pub const Parser = struct {
         self.consume(TokenType.RIGHT_BRACE, "Expect '}' after class body.");
         try self.emit_byte(@intFromEnum(OpCode.OP_POP));
 
+        if (self.current_class_compiler().?.has_super_class) {
+            try self.end_scope();
+        }
+
         self.class_compiler = self.current_class_compiler().?.enclosing;
+    }
+
+    fn synthetic_token(self: *Parser, text: []const u8) Token {
+        _ = self;
+        return Token{
+            .token_type = TokenType.EOF,
+            .start = text,
+            .length = text.len,
+            .line = 0,
+        };
     }
 
     fn dot(self: *Parser, can_assign: bool) ParsingError!void {
@@ -969,6 +1003,32 @@ pub const Parser = struct {
 
         _ = can_assign;
         try self.variable(false);
+    }
+
+    fn super_(self: *Parser, can_assign: bool) ParsingError!void {
+        _ = can_assign;
+
+        if (self.current_class_compiler() == null) {
+            self.error_msg("Can't use 'super' outside of a class.");
+        } else if (!self.current_class_compiler().?.has_super_class) {
+            self.error_msg("Can't use 'super' in a class with no superclass.");
+        }
+
+        self.consume(TokenType.DOT, "Expect '.' after 'super'.");
+        self.consume(TokenType.IDENTIFIER, "Expect superclass method name.");
+        const name = try self.identifier_constant(self.previous.?);
+
+        try self.named_variable(self.synthetic_token("this"), false);
+
+        if (self.match(TokenType.LEFT_PAREN)) {
+            const arg_count = try self.argument_list();
+            try self.named_variable(self.synthetic_token("super"), false);
+            try self.emit_bytes(@intFromEnum(OpCode.OP_SUPER_INVOKE), name);
+            try self.emit_byte(@intCast(arg_count));
+        } else {
+            try self.named_variable(self.synthetic_token("super"), false);
+            try self.emit_bytes(@intFromEnum(OpCode.OP_GET_SUPER), name);
+        }
     }
 };
 

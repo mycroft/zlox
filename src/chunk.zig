@@ -155,6 +155,9 @@ pub const Chunk = struct {
             @intFromEnum(OpCode.OP_INDEX_GET) => return utils.simple_instruction("OP_INDEX_GET", offset),
             @intFromEnum(OpCode.OP_INDEX_SET) => return utils.simple_instruction("OP_INDEX_SET", offset),
             @intFromEnum(OpCode.OP_INVOKE) => return utils.invoke_instruction("OP_INVOKE", self, offset),
+            @intFromEnum(OpCode.OP_INHERIT) => return utils.simple_instruction("OP_INHERIT", offset),
+            @intFromEnum(OpCode.OP_GET_SUPER) => return utils.constant_instruction("OP_GET_SUPER", self, offset),
+            @intFromEnum(OpCode.OP_SUPER_INVOKE) => return utils.invoke_instruction("OP_SUPER_INVOKE", self, offset),
             else => {
                 debug.print("unknown opcode {d}\n", .{instruction});
                 return offset + 1;

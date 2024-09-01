@@ -132,12 +132,12 @@ pub const Table = struct {
         std.debug.print("== End of hash table ==\n\n", .{});
     }
 
-    pub fn add_all(self: *Table, from: Table) void {
-        for (from.entries) |entry| {
+    pub fn add_all(self: *Table, to: *Table) void {
+        for (self.entries) |entry| {
             if (entry.key == null) {
                 continue;
             }
-            _ = self.set(entry.key.?, entry.value);
+            _ = to.set(entry.key.?, entry.value);
         }
     }
 

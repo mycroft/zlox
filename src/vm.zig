@@ -379,6 +379,35 @@ pub const VM = struct {
                         return InterpretResult.RUNTIME_ERROR;
                     }
                 },
+                @intFromEnum(OpCode.OP_INHERIT) => {
+                    const superclass = self.peek(1);
+                    const subclass = self.peek(0).as_obj().as_class();
+
+                    if (!superclass.is_obj() or !superclass.as_obj().is_class()) {
+                        self.runtime_error("Superclass must be a class.");
+                        return InterpretResult.RUNTIME_ERROR;
+                    }
+
+                    superclass.as_obj().as_class().methods.add_all(&subclass.methods);
+                    _ = self.pop(); // subclass
+                },
+                @intFromEnum(OpCode.OP_GET_SUPER) => {
+                    const name: *Obj.String = self.read_constant().as_string();
+                    const superclass = self.pop().as_obj().as_class();
+
+                    if (!self.bind_method(superclass, name)) {
+                        return InterpretResult.RUNTIME_ERROR;
+                    }
+                },
+                @intFromEnum(OpCode.OP_SUPER_INVOKE) => {
+                    const method = self.read_constant().as_string();
+                    const arg_count = self.read_byte();
+                    const superclass = self.pop().as_obj().as_class();
+
+                    if (!self.invoke_from_class(superclass, method, arg_count)) {
+                        return InterpretResult.RUNTIME_ERROR;
+                    }
+                },
                 else => {
                     debug.print("Invalid instruction: {d}\n", .{instruction});
                     return InterpretResult.RUNTIME_ERROR;

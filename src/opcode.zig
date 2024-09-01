@@ -35,4 +35,7 @@ pub const OpCode = enum(u8) {
     OP_INDEX_SET,
     OP_INDEX_GET,
     OP_INVOKE,
+    OP_INHERIT,
+    OP_GET_SUPER,
+    OP_SUPER_INVOKE,
 };

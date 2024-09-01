@@ -1,0 +1,21 @@
+class Doughnut {
+    cook() {
+        print "Dunk in the fryer.";
+    }
+
+    zzz() {
+        print "Bla";
+    }
+}
+
+class Cruller < Doughnut {
+    finish() {
+        print "Glaze with icing.";
+    }
+}
+
+var o2 = Cruller();
+o2.cook();
+o2.finish();
+
+
