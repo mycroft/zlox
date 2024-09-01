@@ -158,8 +158,14 @@ pub const Parser = struct {
     fn end_parser(self: *Parser) !*Obj.Function {
         try self.emit_return();
 
+        const compiler_function = self.compiler.function;
+
         if (!self.had_error and constants.DEBUG_PRINT_CODE) {
-            self.current_chunk().dissassemble("code");
+            var label: []const u8 = "<script>";
+            if (compiler_function.name != null) {
+                label = compiler_function.name.?.chars;
+            }
+            self.current_chunk().disassemble(label);
         }
 
         const function_obj = self.compiler.function;

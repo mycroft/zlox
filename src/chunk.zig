@@ -73,18 +73,18 @@ pub const Chunk = struct {
         debug.print("== end of chunk dump \n\n", .{});
     }
 
-    pub fn dissassemble(self: Chunk, name: []const u8) void {
+    pub fn disassemble(self: Chunk, name: []const u8) void {
         debug.print("== {s} ==\n", .{name});
 
         var offset: usize = 0;
 
         while (offset < self.count) {
-            offset = self.dissassemble_instruction(offset);
+            offset = self.disassemble_instruction(offset);
         }
         debug.print("== end of {s} ==\n\n", .{name});
     }
 
-    pub fn dissassemble_instruction(self: Chunk, offset: usize) usize {
+    pub fn disassemble_instruction(self: Chunk, offset: usize) usize {
         var current_offset = offset;
         debug.print("{d:0>4} ", .{offset});
 

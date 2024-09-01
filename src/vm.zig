@@ -156,7 +156,7 @@ pub const VM = struct {
                     }
                     debug.print("\n", .{});
                 }
-                _ = self.current_chunk().dissassemble_instruction(self.current_frame().ip);
+                _ = self.current_chunk().disassemble_instruction(self.current_frame().ip);
             }
 
             const instruction = self.read_byte();
